@@ -401,20 +401,18 @@ var wide = {
             }
 
             switch (data.cmd) {
-                case 'run': // 正在运行
-                    
-                    if(!wide.curProcessId){
-                    	bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + '<pre>' + data.output + '</pre>');
-                    }else{
+                case 'run':
+                    if (!wide.curProcessId) { // output first time
+                        bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + '<pre>' + data.output + '</pre>');
+                    } else { // the following outputs
                         bottomGroup.fillOutput($('.bottom-window-group .output > div').html().replace(/<\/pre>$/g, data.output + '</pre>'));
                     }
-                    
+
                     wide.curProcessId = data.pid;
 
                     break;
-                case 'run-done': // 运行结束  
+                case 'run-done':
                     wide.curProcessId = undefined;
-                    // 运行结束后修改 [构建&运行] 图标状态为可用状态
                     $(".toolbars .ico-stop").removeClass("ico-stop")
                             .addClass("ico-buildrun").attr("title", config.label.build_n_run);
 
@@ -423,19 +421,19 @@ var wide = {
                 case 'start-test':
                 case 'start-install':
                 case 'start-get':
-                    bottomGroup.fillOutput('<pre>' + data.output + '</pre>');
+                    bottomGroup.fillOutput(data.output);
 
                     break;
                 case 'go test':
                 case 'go install':
                 case 'go get':
-                    bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + '<pre>' + data.output + '</pre>');
+                    bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + data.output);
 
                     break;
                 case 'build':
-                    bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + '<pre>' + data.output + '</pre>');
+                    bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + data.output);
 
-                    if (data.lints) { // 说明编译有错误输出            
+                    if (data.lints) { // has build error
                         for (var i = 0; i < data.lints.length; i++) {
                             var lint = data.lints[i];
 
@@ -448,7 +446,7 @@ var wide = {
                                 .addClass("ico-buildrun").attr("title", config.label.build_n_run);
                     }
 
-                    // 触发一次 gutter lint
+                    // trigger gutter lint
                     CodeMirror.signal(wide.curEditor, "change", wide.curEditor);
 
                     break;
