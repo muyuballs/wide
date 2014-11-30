@@ -8,7 +8,10 @@
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/lint/lint.css">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/fold/foldgutter.css">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/dialog/dialog.css">
-        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/overwrite/codemirror/theme/wide.css">
+
+        {{range $index, $theme := .editorThemes}}
+        <link rel="stylesheet" href="{{$.conf.StaticServer}}/static/js/overwrite/codemirror/theme/{{$theme}}.css">{{end}}
+        
 
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/ztree/zTreeStyle.css">
 
@@ -18,6 +21,8 @@
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/side.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/start.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/about.css?{{.conf.StaticResourceVersion}}">
+
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/themes/{{.user.Theme}}.css?{{.conf.StaticResourceVersion}}">
 
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/user/{{.session.Username}}/style.css?{{.conf.StaticResourceVersion}}">
 
@@ -131,6 +136,7 @@
                 <div class="tabs-panel">
                     <div data-index="filreTree">
                         <ul id="files" tabindex="-1" class="ztree"></ul>
+                        <input id="importFileupload" type="file" name="files[]" style="display: none;" onclick="tree.import();" multiple>
                         <!-- 目录右键菜单 -->
                         <div id="dirRMenu" class="frame">
                             <ul>
@@ -140,6 +146,7 @@
                                 <li class="rename" onclick="tree.rename(this);">{{.i18n.rename}}</li>
                                 <li class="hr"></li>
                                 <li class="refresh" onclick="tree.refresh(this);">{{.i18n.refresh}}</li>
+                                <li class="import" onclick="$('#importFileupload').click();">{{.i18n.import}}</li>
                                 <li class="export" onclick="tree.export(this);">{{.i18n.export}}</li>
                             </ul>
                         </div>
@@ -309,7 +316,8 @@
                                     "output": '{{.conf.OutputChannel}}',
                                     "session": '{{.conf.SessionChannel}}'
                             },
-                            "wideSessionId": '{{.session.Id}}'
+                            "wideSessionId": '{{.session.Id}}',
+                            "editorTheme": '{{.user.Editor.Theme}}'
                     };
                     // 发往 Wide 的所有 AJAX 请求需要使用该函数创建请求参数.
                             function newWideRequest() {
@@ -370,5 +378,9 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/windows.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/hotkeys.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/bottomGroup.js?{{.conf.StaticResourceVersion}}"></script>
+
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/vendor/jquery.ui.widget.js?{{.conf.StaticResourceVersion}}"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.iframe-transport.js?{{.conf.StaticResourceVersion}}"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.fileupload.js?{{.conf.StaticResourceVersion}}"></script>
     </body>
 </html>

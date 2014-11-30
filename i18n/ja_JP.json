@@ -135,5 +135,7 @@
     "apply": "適用する",
     "clearOutput": "空の出力",
     "export": "輸出",
-    "refresh": "リフレッシュ"
+    "refresh": "リフレッシュ",
+    "import": "インポート",
+    "theme": "テーマ"
 }

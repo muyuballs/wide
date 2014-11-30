@@ -111,7 +111,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale,
 		"session": wideSession, "latestSessionContent": user.LatestSessionContent,
-		"pathSeparator": conf.PathSeparator, "codeMirrorVer": conf.CodeMirrorVer}
+		"pathSeparator": conf.PathSeparator, "codeMirrorVer": conf.CodeMirrorVer,
+		"user": user, "editorThemes": conf.GetEditorThemes()}
 
 	glog.V(3).Infof("User [%s] has [%d] sessions", username, len(wideSessions))
 
@@ -279,8 +280,9 @@ func main() {
 	http.HandleFunc("/file/find/name", handlerWrapper(file.Find))
 
 	// file export/import
-	http.HandleFunc("/file/zip", handlerWrapper(file.GetZip))
 	http.HandleFunc("/file/zip/new", handlerWrapper(file.CreateZip))
+	http.HandleFunc("/file/zip", handlerWrapper(file.GetZip))
+	http.HandleFunc("/file/upload", handlerWrapper(file.Upload))
 
 	// editor
 	http.HandleFunc("/editor/ws", handlerWrapper(editor.WSHandler))

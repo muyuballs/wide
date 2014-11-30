@@ -135,5 +135,7 @@
     "apply": "Apply",
     "clearOutput": "Clear Output",
     "export": "Export",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "import": "Import",
+    "theme": "Theme"
 }
