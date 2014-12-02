@@ -47,6 +47,8 @@ var editors = {
         }
     },
     _initClose: function () {
+       new ZeroClipboard($("#copyFilePath"));
+
         // 关闭、关闭其他、关闭所有
         $(".edit-panel").on("mousedown", '.tabs > div', function (event) {
             event.stopPropagation();
@@ -65,6 +67,8 @@ var editors = {
                 "left": left + "px",
                 "top": "21px"
             }).data('index', $(this).data("index"));
+
+            $("#copyFilePath").attr('data-clipboard-text', $(this).find("span:eq(0)").attr("title"));
             return false;
         });
     },
@@ -91,14 +95,14 @@ var editors = {
                 });
 
                 $("#dialogCloseEditor button.discard").click(function () {
+                    var i = $("#dialogCloseEditor").data("index");
+                    editors.tabs.del(editors.data[i].id);
                     $("#dialogCloseEditor").dialog("close");
 
                     editors._removeAllMarker();
                 });
 
                 $("#dialogCloseEditor button.cancel").click(function () {
-                    var i = $("#dialogCloseEditor").data("index");
-                    editors.tabs.del(editors.data[i].id);
                     $("#dialogCloseEditor").dialog("close");
 
                     editors._removeAllMarker();
@@ -565,7 +569,7 @@ var editors = {
         menu.undisabled(['save-all', 'close-all', 'build', 'run', 'go-test', 'go-get', 'go-install']);
 
         var textArea = document.getElementById("editor" + id);
-        textArea.value = data.content;        
+        textArea.value = data.content;
 
         var editor = CodeMirror.fromTextArea(textArea, {
             lineNumbers: true,
@@ -576,6 +580,7 @@ var editors = {
             rulers: [{color: "#ccc", column: 120, lineStyle: "dashed"}],
             styleActiveLine: true,
             theme: config.editorTheme,
+            tabSize: config.editorTabSize,
             indentUnit: 4,
             foldGutter: true,
             cursorHeight: 1,

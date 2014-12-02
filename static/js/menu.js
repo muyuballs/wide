@@ -347,7 +347,7 @@ var menu = {
 
             $("#dialogPreference").dialog({
                 "modal": true,
-                "height": 460,
+                "height": 280,
                 "width": 800,
                 "title": config.label.perference,
                 "okText": config.label.apply,
@@ -369,7 +369,8 @@ var menu = {
                             $editorFontFamily = $dialogPreference.find("input[name=editorFontFamily]"),
                             $editorFontSize = $dialogPreference.find("input[name=editorFontSize]"),
                             $editorLineHeight = $dialogPreference.find("input[name=editorLineHeight]"),
-                            $editorTheme = $dialogPreference.find("input[name=editorTheme]");
+                            $editorTheme = $dialogPreference.find("input[name=editorTheme]"),
+                            $editorTabSize = $dialogPreference.find("input[name=editorTabSize]");
 
                     $.extend(request, {
                         "fontFamily": $fontFamily.val(),
@@ -382,7 +383,8 @@ var menu = {
                         "editorFontFamily": $editorFontFamily.val(),
                         "editorFontSize": $editorFontSize.val(),
                         "editorLineHeight": $editorLineHeight.val(),
-                        "editorTheme": $editorTheme.val()
+                        "editorTheme": $editorTheme.val(),
+                        "editorTabSize": $editorTabSize.val()
                     });
 
                     $.ajax({
@@ -405,9 +407,17 @@ var menu = {
                             $editorFontSize.data("value", $editorFontSize.val());
                             $editorLineHeight.data("value", $editorLineHeight.val());
                             $editorTheme.data("value", $editorTheme.val());
+                            $editorTabSize.data("value", $editorTabSize.val());
 
                             var $okBtn = $("#dialogPreference").closest(".dialog-main").find(".dialog-footer > button:eq(0)");
                             $okBtn.prop("disabled", true);
+
+                            $("#themesLink").attr("href", config.staticServer + '/static/css/themes/' + $theme.val() + '.css');
+
+                            config.editorTheme = $editorTheme.val();
+                            for (var i = 0, ii = editors.data.length; i < ii; i++) {
+                                editors.data[i].editor.setOption("theme", $editorTheme.val());
+                            }
                         }
                     });
                 }
@@ -417,5 +427,5 @@ var menu = {
                 id: ".preference"
             });
         });
-    },
+    }
 };

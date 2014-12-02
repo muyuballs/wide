@@ -1,12 +1,12 @@
-# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg?style=flat-square)](https://travis-ci.org/b3log/wide) [![API Documentation](http://img.shields.io/badge/api-Godoc-blue.svg?style=flat-square)](http://godoc.org/github.com/b3log/wide) [![Apache License](http://img.shields.io/badge/license-ALv2-orange.svg?style=flat-square)](http://www.apache.org/licenses/LICENSE-2.0)
+# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg)](https://travis-ci.org/b3log/wide) [![API Documentation](http://img.shields.io/badge/api-Godoc-blue.svg)](http://godoc.org/github.com/b3log/wide) [![Apache License](http://img.shields.io/badge/license-ALv2-orange.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 
-_Have a [**try**](http://121.41.106.121:7070/signup) first!_
+_Have a [**try**](http://121.41.106.121:7070/signup) first, and then help us to make it [happen](http://igg.me/at/widehub)!_
 
 ## Intro
 
 A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
 
-<img src="https://cloud.githubusercontent.com/assets/873584/4606377/d0ca3c2a-521b-11e4-912c-d955ab05850b.png" width="100%" />
+![Hello, 世界](https://cloud.githubusercontent.com/assets/873584/4606377/d0ca3c2a-521b-11e4-912c-d955ab05850b.png)
 
 ## Motivation
 
@@ -31,16 +31,19 @@ A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
 
 ## Features
 
-* Code Highlight, Folding: Go/HTML/JavaScript/Markdown etc.
-* Autocomplete: Go/HTML etc.
-* Format: Go/HTML/JSON etc.
-* Run & Debug: run/debug multiple processes at the same time
-* Multiplayer: a real team development experience
-* Navigation, Jump to declaration, Find usages, File search etc.
-* Shell: run command on the server
-* Git integration: git command on the web
-* Web development: Frontend devlopment (HTML/JS/CSS) all in one
-* Go tool: go get/install/fmt etc.
+* [X] Code Highlight, Folding: Go/HTML/JavaScript/Markdown etc.
+* [X] Autocomplete: Go/HTML etc.
+* [X] Format: Go/HTML/JSON etc.
+* [X] Build & Run
+* [ ] Debug
+* [X] Multiplayer: a real team development experience
+* [X] Navigation, Jump to declaration, Find usages, File search etc.
+* [X] Shell: run command on the server
+* [ ] Git integration: git command on the web
+* [X] Web development: Frontend devlopment (HTML/JS/CSS) all in one
+* [X] Go tool: go get/install/fmt etc.
+* [X] File Import & Export
+* [X] Themes
 
 ## Architecture 
 

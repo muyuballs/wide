@@ -11,7 +11,7 @@
 
         {{range $index, $theme := .editorThemes}}
         <link rel="stylesheet" href="{{$.conf.StaticServer}}/static/js/overwrite/codemirror/theme/{{$theme}}.css">{{end}}
-        
+
 
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/ztree/zTreeStyle.css">
 
@@ -22,7 +22,7 @@
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/start.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/about.css?{{.conf.StaticResourceVersion}}">
 
-        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/themes/{{.user.Theme}}.css?{{.conf.StaticResourceVersion}}">
+        <link id="themesLink" rel="stylesheet" href="{{.conf.StaticServer}}/static/css/themes/{{.user.Theme}}.css?{{.conf.StaticResourceVersion}}">
 
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/user/{{.session.Username}}/style.css?{{.conf.StaticResourceVersion}}">
 
@@ -181,6 +181,10 @@
                         </li>    
                         <li onclick="editors.closeOther()" title="{{.i18n.close_other}}">
                             <span>{{.i18n.close_other}}</span>
+                        </li>
+                        <li class="hr"></li>
+                        <li id="copyFilePath" title="Copy file path">
+                            <span>{{.i18n.copy_file_path}}</span>
                         </li>    
                     </ul>
                 </div>
@@ -278,8 +282,8 @@
         </div>
         <script>
                     var config = {
-                    "pathSeparator": '{{.pathSeparator}}',
-                            "latestSessionContent": {{.latestSessionContent}},
+                    "staticServer": "{{.conf.StaticServer}}",
+                            "pathSeparator": '{{.pathSeparator}}',
                             "label": {
                             "restore_editor": "{{.i18n.restore_editor}}",
                                     "max_editor": "{{.i18n.max_editor}}",
@@ -317,7 +321,9 @@
                                     "session": '{{.conf.SessionChannel}}'
                             },
                             "wideSessionId": '{{.session.Id}}',
-                            "editorTheme": '{{.user.Editor.Theme}}'
+                            "editorTheme": '{{.user.Editor.Theme}}',
+                            "latestSessionContent": {{.latestSessionContent}},
+                            "editorTabSize": '{{.user.Editor.TabSize}}'
                     };
                     // 发往 Wide 的所有 AJAX 请求需要使用该函数创建请求参数.
                             function newWideRequest() {
@@ -367,6 +373,12 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/js-beautify-1.5.4/beautify-html.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/js-beautify-1.5.4/beautify-css.js?{{.conf.StaticResourceVersion}}"></script>
 
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/zeroclipboard/ZeroClipboard.min.js?{{.conf.StaticResourceVersion}}"></script>
+
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/vendor/jquery.ui.widget.js?{{.conf.StaticResourceVersion}}"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.iframe-transport.js?{{.conf.StaticResourceVersion}}"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.fileupload.js?{{.conf.StaticResourceVersion}}"></script>
+
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/tabs.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/dialog.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/editors.js?{{.conf.StaticResourceVersion}}"></script>
@@ -378,9 +390,5 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/windows.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/hotkeys.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/bottomGroup.js?{{.conf.StaticResourceVersion}}"></script>
-
-        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/vendor/jquery.ui.widget.js?{{.conf.StaticResourceVersion}}"></script>
-        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.iframe-transport.js?{{.conf.StaticResourceVersion}}"></script>
-        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/jquery-file-upload-9.8.0/jquery.fileupload.js?{{.conf.StaticResourceVersion}}"></script>
     </body>
 </html>
