@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// File tree manipulations.
+// Package file includes file related manipulations.
 package file
 
 import (
@@ -26,24 +26,28 @@ import (
 
 	"github.com/b3log/wide/conf"
 	"github.com/b3log/wide/event"
+	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/session"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
 
-// File node, used to construct the file tree.
-type FileNode struct {
-	Name      string      `json:"name"`
-	Path      string      `json:"path"`
-	IconSkin  string      `json:"iconSkin"`  // Value should be end with a space
-	Type      string      `json:"type"`      // "f": file, "d": directory
-	Creatable bool        `json:"creatable"` // whether can create file in this file node
-	Removable bool        `json:"removable"` // whether can remove this file node
-	Mode      string      `json:"mode"`
-	FileNodes []*FileNode `json:"children"`
+// Logger.
+var logger = log.NewLogger(os.Stdout)
+
+// Node represents a file node in file tree.
+type Node struct {
+	Name      string  `json:"name"`
+	Path      string  `json:"path"`
+	IconSkin  string  `json:"iconSkin"`  // Value should be end with a space
+	Type      string  `json:"type"`      // "f": file, "d": directory
+	Creatable bool    `json:"creatable"` // whether can create file in this file node
+	Removable bool    `json:"removable"` // whether can remove this file node
+	IsGoAPI   bool    `json:"isGOAPI"`
+	Mode      string  `json:"mode"`
+	Children  []*Node `json:"children"`
 }
 
-// Source code snippet, used to as the result of "Find Usages", "Search".
+// Snippet represents a source code snippet, used to as the result of "Find Usages", "Search".
 type Snippet struct {
 	Path     string   `json:"path"`     // file path
 	Line     int      `json:"line"`     // line number
@@ -51,16 +55,16 @@ type Snippet struct {
 	Contents []string `json:"contents"` // lines nearby
 }
 
-var apiNode *FileNode
+var apiNode *Node
 
 // initAPINode builds the Go API file node.
 func initAPINode() {
 	apiPath := util.Go.GetAPIPath()
 
-	apiNode = &FileNode{Name: "Go API", Path: apiPath, IconSkin: "ico-ztree-dir-api ", Type: "d",
-		Creatable: false, Removable: false, FileNodes: []*FileNode{}}
+	apiNode = &Node{Name: "Go API", Path: apiPath, IconSkin: "ico-ztree-dir-api ", Type: "d",
+		Creatable: false, Removable: false, IsGoAPI: true, Children: []*Node{}}
 
-	walk(apiPath, apiNode, false, false)
+	walk(apiPath, apiNode, false, false, true)
 }
 
 // GetFiles handles request of constructing user workspace file tree.
@@ -69,7 +73,7 @@ func initAPINode() {
 // so that users can easily view the Go API source code in file tree.
 func GetFiles(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
-	defer util.RetJSON(w, r, data)
+	defer util.RetGzJSON(w, r, data)
 
 	session, _ := session.HTTPSession.Get(r, "wide-session")
 	if session.IsNew {
@@ -79,10 +83,10 @@ func GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	username := session.Values["username"].(string)
 
-	userWorkspace := conf.Wide.GetUserWorkspace(username)
+	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
 
-	root := FileNode{Name: "root", Path: "", IconSkin: "ico-ztree-dir ", Type: "d", FileNodes: []*FileNode{}}
+	root := Node{Name: "root", Path: "", IconSkin: "ico-ztree-dir ", Type: "d", Children: []*Node{}}
 
 	if nil == apiNode { // lazy init
 		initAPINode()
@@ -92,18 +96,18 @@ func GetFiles(w http.ResponseWriter, r *http.Request) {
 	for _, workspace := range workspaces {
 		workspacePath := workspace + conf.PathSeparator + "src"
 
-		workspaceNode := FileNode{Name: workspace[strings.LastIndex(workspace, conf.PathSeparator)+1:],
+		workspaceNode := Node{Name: workspace[strings.LastIndex(workspace, conf.PathSeparator)+1:],
 			Path: workspacePath, IconSkin: "ico-ztree-dir-workspace ", Type: "d",
-			Creatable: true, Removable: false, FileNodes: []*FileNode{}}
+			Creatable: true, Removable: false, IsGoAPI: false, Children: []*Node{}}
 
-		walk(workspacePath, &workspaceNode, true, true)
+		walk(workspacePath, &workspaceNode, true, true, false)
 
 		// add workspace node
-		root.FileNodes = append(root.FileNodes, &workspaceNode)
+		root.Children = append(root.Children, &workspaceNode)
 	}
 
 	// add Go API node
-	root.FileNodes = append(root.FileNodes, apiNode)
+	root.Children = append(root.Children, apiNode)
 
 	data["root"] = root
 }
@@ -113,14 +117,14 @@ func RefreshDirectory(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	path := r.FormValue("path")
 
-	node := FileNode{Name: "root", Path: path, IconSkin: "ico-ztree-dir ", Type: "d", FileNodes: []*FileNode{}}
+	node := Node{Name: "root", Path: path, IconSkin: "ico-ztree-dir ", Type: "d", Children: []*Node{}}
 
-	walk(path, &node, true, true)
+	walk(path, &node, true, true, false)
 
 	w.Header().Set("Content-Type", "application/json")
-	data, err := json.Marshal(node.FileNodes)
+	data, err := json.Marshal(node.Children)
 	if err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		return
 	}
 
@@ -135,7 +139,7 @@ func GetFile(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -160,13 +164,15 @@ func GetFile(w http.ResponseWriter, r *http.Request) {
 
 		data["mode"] = "img"
 
-		user := GetUsre(path)
-		if nil == user {
-			glog.Warningf("The path [%s] has no owner")
+		username := conf.GetOwner(path)
+		if "" == username {
+			logger.Warnf("The path [%s] has no owner")
 			data["path"] = ""
 
 			return
 		}
+
+		user := conf.GetUser(username)
 
 		data["path"] = "/workspace/" + user.Name + "/" + strings.Replace(path, user.GetWorkspace(), "", 1)
 
@@ -193,7 +199,7 @@ func SaveFile(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -205,7 +211,7 @@ func SaveFile(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(filePath)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -216,7 +222,7 @@ func SaveFile(w http.ResponseWriter, r *http.Request) {
 	fout.WriteString(code)
 
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		wSession := session.WideSessions.Get(sid)
@@ -235,7 +241,7 @@ func NewFile(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -270,7 +276,7 @@ func RemoveFile(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -297,7 +303,7 @@ func RenameFile(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -336,7 +342,7 @@ func Find(w http.ResponseWriter, r *http.Request) {
 
 	var args map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -353,7 +359,7 @@ func Find(w http.ResponseWriter, r *http.Request) {
 	}
 	username := session.Values["username"].(string)
 
-	userWorkspace := conf.Wide.GetUserWorkspace(username)
+	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
 
 	if "" != path && !util.File.IsDir(path) {
@@ -385,23 +391,44 @@ func SearchText(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
 	}
 
+	sid := args["sid"].(string)
+	wSession := session.WideSessions.Get(sid)
+	if nil == wSession {
+		data["succ"] = false
+
+		return
+	}
+
+	// XXX: just one directory
+
 	dir := args["dir"].(string)
+	if "" == dir {
+		userWorkspace := conf.GetUserWorkspace(wSession.Username)
+		workspaces := filepath.SplitList(userWorkspace)
+		dir = workspaces[0]
+	}
+
 	extension := args["extension"].(string)
 	text := args["text"].(string)
 
-	founds := search(dir, extension, text, []*Snippet{})
+	founds := []*Snippet{}
+	if util.File.IsDir(dir) {
+		founds = search(dir, extension, text, []*Snippet{})
+	} else {
+		founds = searchInFile(dir, text)
+	}
 
 	data["founds"] = founds
 }
 
 // walk traverses the specified path to build a file tree.
-func walk(path string, node *FileNode, creatable, removable bool) {
+func walk(path string, node *Node, creatable, removable, isGOAPI bool) {
 	files := listFiles(path)
 
 	for _, filename := range files {
@@ -409,11 +436,11 @@ func walk(path string, node *FileNode, creatable, removable bool) {
 
 		fio, _ := os.Lstat(fpath)
 
-		child := FileNode{Name: filename, Path: fpath, Removable: removable, FileNodes: []*FileNode{}}
-		node.FileNodes = append(node.FileNodes, &child)
+		child := Node{Name: filename, Path: fpath, Removable: removable, IsGoAPI: isGOAPI, Children: []*Node{}}
+		node.Children = append(node.Children, &child)
 
 		if nil == fio {
-			glog.Warningf("Path [%s] is nil", fpath)
+			logger.Warnf("Path [%s] is nil", fpath)
 
 			continue
 		}
@@ -423,7 +450,7 @@ func walk(path string, node *FileNode, creatable, removable bool) {
 			child.Creatable = creatable
 			child.IconSkin = "ico-ztree-dir "
 
-			walk(fpath, &child, creatable, removable)
+			walk(fpath, &child, creatable, removable, isGOAPI)
 		} else {
 			child.Type = "f"
 			child.Creatable = creatable
@@ -455,7 +482,7 @@ func listFiles(dirname string) []string {
 		fio, err := os.Lstat(path)
 
 		if nil != err {
-			glog.Warningf("Can't read file info [%s]", path)
+			logger.Warnf("Can't read file info [%s]", path)
 
 			continue
 		}
@@ -546,30 +573,30 @@ func createFile(path, fileType string) bool {
 	case "f":
 		file, err := os.OpenFile(path, os.O_CREATE, 0775)
 		if nil != err {
-			glog.Error(err)
+			logger.Error(err)
 
 			return false
 		}
 
 		defer file.Close()
 
-		glog.V(5).Infof("Created file [%s]", path)
+		logger.Debugf("Created file [%s]", path)
 
 		return true
 	case "d":
 		err := os.Mkdir(path, 0775)
 
 		if nil != err {
-			glog.Error(err)
+			logger.Error(err)
 
 			return false
 		}
 
-		glog.V(5).Infof("Created directory [%s]", path)
+		logger.Debugf("Created directory [%s]", path)
 
 		return true
 	default:
-		glog.Errorf("Unsupported file type [%s]", fileType)
+		logger.Errorf("Unsupported file type [%s]", fileType)
 
 		return false
 	}
@@ -578,12 +605,12 @@ func createFile(path, fileType string) bool {
 // removeFile removes file on the specified path.
 func removeFile(path string) bool {
 	if err := os.RemoveAll(path); nil != err {
-		glog.Errorf("Removes [%s] failed: [%s]", path, err.Error())
+		logger.Errorf("Removes [%s] failed: [%s]", path, err.Error())
 
 		return false
 	}
 
-	glog.V(5).Infof("Removed [%s]", path)
+	logger.Debugf("Removed [%s]", path)
 
 	return true
 }
@@ -591,12 +618,12 @@ func removeFile(path string) bool {
 // renameFile renames (moves) a file from the specified old path to the specified new path.
 func renameFile(oldPath, newPath string) bool {
 	if err := os.Rename(oldPath, newPath); nil != err {
-		glog.Errorf("Renames [%s] failed: [%s]", oldPath, err.Error())
+		logger.Errorf("Renames [%s] failed: [%s]", oldPath, err.Error())
 
 		return false
 	}
 
-	glog.V(5).Infof("Renamed [%s] to [%s]", oldPath, newPath)
+	logger.Debugf("Renamed [%s] to [%s]", oldPath, newPath)
 
 	return true
 }
@@ -616,7 +643,7 @@ func find(dir, name string, results []*string) []*string {
 	f.Close()
 
 	if nil != err {
-		glog.Errorf("Read dir [%s] failed: [%s]", dir, err.Error())
+		logger.Errorf("Read dir [%s] failed: [%s]", dir, err.Error())
 
 		return results
 	}
@@ -639,7 +666,7 @@ func find(dir, name string, results []*string) []*string {
 			match, err := filepath.Match(strings.ToLower(pattern), strings.ToLower(path))
 
 			if nil != err {
-				glog.Errorf("Find match filename failed: [%s]", err.Error)
+				logger.Errorf("Find match filename failed: [%s]", err.Error())
 
 				continue
 			}
@@ -665,7 +692,7 @@ func search(dir, extension, text string, snippets []*Snippet) []*Snippet {
 	f.Close()
 
 	if nil != err {
-		glog.Errorf("Read dir [%s] failed: [%s]", dir, err.Error())
+		logger.Errorf("Read dir [%s] failed: [%s]", dir, err.Error())
 
 		return snippets
 	}
@@ -693,7 +720,7 @@ func searchInFile(path string, text string) []*Snippet {
 
 	bytes, err := ioutil.ReadFile(path)
 	if nil != err {
-		glog.Errorf("Read file [%s] failed: [%s]", path, err.Error())
+		logger.Errorf("Read file [%s] failed: [%s]", path, err.Error())
 
 		return ret
 	}
@@ -706,7 +733,7 @@ func searchInFile(path string, text string) []*Snippet {
 	lines := strings.Split(content, "\n")
 
 	for idx, line := range lines {
-		ch := strings.Index(line, text)
+		ch := strings.Index(strings.ToLower(line), strings.ToLower(text))
 
 		if -1 != ch {
 			snippet := &Snippet{Path: path, Line: idx + 1, Ch: ch + 1, Contents: []string{line}}
@@ -716,15 +743,4 @@ func searchInFile(path string, text string) []*Snippet {
 	}
 
 	return ret
-}
-
-// GetUsre gets the user the specified path belongs to. Returns nil if not found.
-func GetUsre(path string) *conf.User {
-	for _, user := range conf.Wide.Users {
-		if strings.HasPrefix(path, user.GetWorkspace()) {
-			return user
-		}
-	}
-
-	return nil
 }

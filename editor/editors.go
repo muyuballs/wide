@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Editor manipulations.
+// Package editor includes editor related manipulations.
 package editor
 
 import (
@@ -29,13 +29,17 @@ import (
 
 	"github.com/b3log/wide/conf"
 	"github.com/b3log/wide/file"
+	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/session"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
 
+// Logger.
+var logger = log.NewLogger(os.Stdout)
+
 // WSHandler handles request of creating editor channel.
+// XXX: NOT used at present
 func WSHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
 	if httpSession.IsNew {
@@ -57,7 +61,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 	session.EditorWS[sid] = &editorChan
 
-	glog.Infof("Open a new [Editor] with session [%s], %d", sid, len(session.EditorWS))
+	logger.Tracef("Open a new [Editor] with session [%s], %d", sid, len(session.EditorWS))
 
 	args := map[string]interface{}{}
 	for {
@@ -71,7 +75,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 		offset := getCursorOffset(code, line, ch)
 
-		// glog.Infof("offset: %d", offset)
+		logger.Tracef("offset: %d", offset)
 
 		gocode := util.Go.GetExecutableInGOBIN("gocode")
 		argv := []string{"-f=json", "autocomplete", strconv.Itoa(offset)}
@@ -90,7 +94,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 		ret = map[string]interface{}{"output": string(output.Bytes()), "cmd": "autocomplete"}
 
 		if err := session.EditorWS[sid].WriteJSON(&ret); err != nil {
-			glog.Error("Editor WS ERROR: " + err.Error())
+			logger.Error("Editor WS ERROR: " + err.Error())
 			return
 		}
 	}
@@ -101,7 +105,7 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -120,7 +124,7 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(path)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -130,7 +134,7 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 	fout.WriteString(code)
 
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -141,9 +145,9 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	offset := getCursorOffset(code, line, ch)
 
-	// glog.Infof("offset: %d", offset)
+	logger.Tracef("offset: %d", offset)
 
-	userWorkspace := conf.Wide.GetUserWorkspace(username)
+	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
 	libPath := ""
 	for _, workspace := range workspaces {
@@ -152,7 +156,7 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 		libPath += userLib + conf.PathListSeparator
 	}
 
-	glog.V(5).Infof("gocode set lib-path %s", libPath)
+	logger.Tracef("gocode set lib-path [%s]", libPath)
 
 	// FIXME: using gocode set lib-path has some issues while accrossing workspaces
 	gocode := util.Go.GetExecutableInGOBIN("gocode")
@@ -168,7 +172,7 @@ func AutocompleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	output, err := cmd.CombinedOutput()
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -188,7 +192,7 @@ func GetExprInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	var args map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -201,7 +205,7 @@ func GetExprInfoHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(path)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -211,7 +215,7 @@ func GetExprInfoHandler(w http.ResponseWriter, r *http.Request) {
 	fout.WriteString(code)
 
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -222,18 +226,18 @@ func GetExprInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	offset := getCursorOffset(code, line, ch)
 
-	// glog.Infof("offset [%d]", offset)
+	logger.Tracef("offset [%d]", offset)
 
-	ide_stub := util.Go.GetExecutableInGOBIN("ide_stub")
+	ideStub := util.Go.GetExecutableInGOBIN("ide_stub")
 	argv := []string{"type", "-cursor", filename + ":" + strconv.Itoa(offset), "-info", "."}
-	cmd := exec.Command(ide_stub, argv...)
+	cmd := exec.Command(ideStub, argv...)
 	cmd.Dir = curDir
 
 	setCmdEnv(cmd, username)
 
 	output, err := cmd.CombinedOutput()
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -264,7 +268,7 @@ func FindDeclarationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var args map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -277,7 +281,7 @@ func FindDeclarationHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(path)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -287,7 +291,7 @@ func FindDeclarationHandler(w http.ResponseWriter, r *http.Request) {
 	fout.WriteString(code)
 
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -298,18 +302,18 @@ func FindDeclarationHandler(w http.ResponseWriter, r *http.Request) {
 
 	offset := getCursorOffset(code, line, ch)
 
-	// glog.Infof("offset [%d]", offset)
+	logger.Tracef("offset [%d]", offset)
 
-	ide_stub := util.Go.GetExecutableInGOBIN("ide_stub")
+	ideStub := util.Go.GetExecutableInGOBIN("ide_stub")
 	argv := []string{"type", "-cursor", filename + ":" + strconv.Itoa(offset), "-def", "."}
-	cmd := exec.Command(ide_stub, argv...)
+	cmd := exec.Command(ideStub, argv...)
 	cmd.Dir = curDir
 
 	setCmdEnv(cmd, username)
 
 	output, err := cmd.CombinedOutput()
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -349,7 +353,7 @@ func FindUsagesHandler(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -362,7 +366,7 @@ func FindUsagesHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(filePath)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -372,7 +376,7 @@ func FindUsagesHandler(w http.ResponseWriter, r *http.Request) {
 	fout.WriteString(code)
 
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -382,18 +386,18 @@ func FindUsagesHandler(w http.ResponseWriter, r *http.Request) {
 	ch := int(args["cursorCh"].(float64))
 
 	offset := getCursorOffset(code, line, ch)
-	// glog.Infof("offset [%d]", offset)
+	logger.Tracef("offset [%d]", offset)
 
-	ide_stub := util.Go.GetExecutableInGOBIN("ide_stub")
+	ideStub := util.Go.GetExecutableInGOBIN("ide_stub")
 	argv := []string{"type", "-cursor", filename + ":" + strconv.Itoa(offset), "-use", "."}
-	cmd := exec.Command(ide_stub, argv...)
+	cmd := exec.Command(ideStub, argv...)
 	cmd.Dir = curDir
 
 	setCmdEnv(cmd, username)
 
 	output, err := cmd.CombinedOutput()
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -451,7 +455,7 @@ func getCursorOffset(code string, line, ch int) (offset int) {
 }
 
 func setCmdEnv(cmd *exec.Cmd, username string) {
-	userWorkspace := conf.Wide.GetUserWorkspace(username)
+	userWorkspace := conf.GetUserWorkspace(username)
 
 	cmd.Env = append(cmd.Env,
 		"GOPATH="+userWorkspace,

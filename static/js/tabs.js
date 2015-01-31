@@ -1,18 +1,18 @@
-/* 
- * Copyright (c) 2014, B3log
- *  
+/*
+ * Copyright (c) 2014-2015, b3log.org
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
 var Tabs = function (obj) {
     obj._$tabsPanel = $(obj.id + " > .tabs-panel");
@@ -23,6 +23,19 @@ var Tabs = function (obj) {
     this.obj.STACKSIZE = 64;
 
     this._init(obj);
+
+    // DOM 元素存在时，应顺序入栈
+    var _it = this;
+    $(obj.id + " > .tabs > div").each(function () {
+        var id = $(this).data("index");
+        if (obj._stack.length === _it.obj.STACKSIZE) {
+            obj._stack.splice(0, 1);
+        }
+        if (obj._stack[obj._stack.length - 1] !== id) {
+            _it.obj._stack.push(id);
+        }
+    });
+
 };
 
 $.extend(Tabs.prototype, {
@@ -30,6 +43,10 @@ $.extend(Tabs.prototype, {
         var _that = this;
 
         obj._$tabs.on("click", "div", function (event) {
+            if ($(this).hasClass('current')) {
+                return false;
+            }
+            
             var id = $(this).data("index");
             _that.setCurrent(id);
             if (typeof (obj.clickAfter) === "function") {
@@ -74,7 +91,7 @@ $.extend(Tabs.prototype, {
                 $tabs = this.obj._$tabs;
 
         $tabs.append('<div data-index="' + data.id + '">'
-                + data.title + '<span class="ico-close font-ico"></span></div>');
+                + data.title + ' <span class="ico-close font-ico"></span></div>');
         $tabsPanel.append('<div data-index="' + data.id + '">' + data.content
                 + '</div>');
 
@@ -97,6 +114,7 @@ $.extend(Tabs.prototype, {
         for (var i = 0; i < stack.length; i++) {
             if (id === stack[i]) {
                 stack.splice(i, 1);
+                i--;
             }
         }
 
@@ -139,5 +157,9 @@ $.extend(Tabs.prototype, {
 
         $tabs.children("div[data-index='" + id + "']").addClass("current");
         $tabsPanel.children("div[data-index='" + id + "']").show();
+
+        if (typeof this.obj.setAfter === 'function') {
+            this.obj.setAfter();
+        }
     }
 });

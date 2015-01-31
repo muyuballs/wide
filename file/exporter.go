@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
 
 // GetZip handles request of retrieving zip file.
@@ -44,7 +43,7 @@ func GetZip(w http.ResponseWriter, r *http.Request) {
 	filename := filepath.Base(path)
 
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
-	w.Header().Set("Content-type", "application/zip")
+	w.Header().Set("Content-Type", "application/zip")
 	http.ServeFile(w, r, path)
 
 	os.Remove(path)
@@ -57,7 +56,7 @@ func CreateZip(w http.ResponseWriter, r *http.Request) {
 
 	var args map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -75,7 +74,7 @@ func CreateZip(w http.ResponseWriter, r *http.Request) {
 
 	zipFile, err := util.Zip.Create(path + ".zip")
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return

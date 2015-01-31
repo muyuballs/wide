@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,14 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"html/template"
+	"io"
 	"math/rand"
 	"mime"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"strconv"
@@ -31,33 +34,38 @@ import (
 	"github.com/b3log/wide/event"
 	"github.com/b3log/wide/file"
 	"github.com/b3log/wide/i18n"
+	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/notification"
 	"github.com/b3log/wide/output"
 	"github.com/b3log/wide/session"
 	"github.com/b3log/wide/shell"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
+
+// Logger
+var logger *log.Logger
 
 // The only one init function in Wide.
 func init() {
 	confPath := flag.String("conf", "conf/wide.json", "path of wide.json")
-	confIP := flag.String("ip", "", "ip to visit")
-	confPort := flag.String("port", "", "port to visit")
+	confIP := flag.String("ip", "", "this will overwrite Wide.IP if specified")
+	confPort := flag.String("port", "", "this will overwrite Wide.Port if specified")
 	confServer := flag.String("server", "", "this will overwrite Wide.Server if specified")
-	confChannel := flag.String("channel", "", "this will overwrite Wide.XXXChannel if specified")
+	confLogLevel := flag.String("log_level", "debug", "this will overwrite Wide.LogLevel if specified")
+	confStaticServer := flag.String("static_server", "", "this will overwrite Wide.StaticServer if specified")
+	confContext := flag.String("context", "", "this will overwrite Wide.Context if specified")
+	confChannel := flag.String("channel", "", "this will overwrite Wide.Channel if specified")
 	confStat := flag.Bool("stat", false, "whether report statistics periodically")
 	confDocker := flag.Bool("docker", false, "whether run in a docker container")
 
-	flag.Set("alsologtostderr", "true")
-	flag.Set("stderrthreshold", "INFO")
-	flag.Set("v", "3")
-
 	flag.Parse()
+
+	log.SetLevel("warn")
+	logger = log.NewLogger(os.Stdout)
 
 	wd := util.OS.Pwd()
 	if strings.HasPrefix(wd, os.TempDir()) {
-		glog.Error("Don't run wide in OS' temp directory or with `go run`")
+		logger.Error("Don't run wide in OS' temp directory or with `go run`")
 
 		os.Exit(-1)
 	}
@@ -66,11 +74,12 @@ func init() {
 
 	event.Load()
 
-	conf.Load(*confPath, *confIP, *confPort, *confServer, *confChannel, *confDocker)
+	conf.Load(*confPath, *confIP, *confPort, *confServer, *confLogLevel, *confStaticServer, *confContext, *confChannel,
+		*confDocker)
 
 	conf.FixedTimeCheckEnv()
-	conf.FixedTimeSave()
 
+	session.FixedTimeSave()
 	session.FixedTimeRelease()
 
 	if *confStat {
@@ -78,16 +87,109 @@ func init() {
 	}
 }
 
+// Main.
+func main() {
+	runtime.GOMAXPROCS(conf.Wide.MaxProcs)
+
+	initMime()
+
+	// IDE
+	http.HandleFunc(conf.Wide.Context+"/", handlerGzWrapper(indexHandler))
+	http.HandleFunc(conf.Wide.Context+"/start", handlerWrapper(startHandler))
+	http.HandleFunc(conf.Wide.Context+"/about", handlerWrapper(aboutHandler))
+	http.HandleFunc(conf.Wide.Context+"/keyboard_shortcuts", handlerWrapper(keyboardShortcutsHandler))
+
+	// static resources
+	http.Handle(conf.Wide.Context+"/static/", http.StripPrefix(conf.Wide.Context+"/static/", http.FileServer(http.Dir("static"))))
+	serveSingle("/favicon.ico", "./static/favicon.ico")
+
+	// workspaces
+	for _, user := range conf.Users {
+		http.Handle(conf.Wide.Context+"/workspace/"+user.Name+"/",
+			http.StripPrefix(conf.Wide.Context+"/workspace/"+user.Name+"/", http.FileServer(http.Dir(user.GetWorkspace()))))
+	}
+
+	// session
+	http.HandleFunc(conf.Wide.Context+"/session/ws", handlerWrapper(session.WSHandler))
+	http.HandleFunc(conf.Wide.Context+"/session/save", handlerWrapper(session.SaveContent))
+
+	// run
+	http.HandleFunc(conf.Wide.Context+"/build", handlerWrapper(output.BuildHandler))
+	http.HandleFunc(conf.Wide.Context+"/run", handlerWrapper(output.RunHandler))
+	http.HandleFunc(conf.Wide.Context+"/stop", handlerWrapper(output.StopHandler))
+	http.HandleFunc(conf.Wide.Context+"/go/test", handlerWrapper(output.GoTestHandler))
+	http.HandleFunc(conf.Wide.Context+"/go/vet", handlerWrapper(output.GoVetHandler))
+	http.HandleFunc(conf.Wide.Context+"/go/get", handlerWrapper(output.GoGetHandler))
+	http.HandleFunc(conf.Wide.Context+"/go/install", handlerWrapper(output.GoInstallHandler))
+	http.HandleFunc(conf.Wide.Context+"/output/ws", handlerWrapper(output.WSHandler))
+
+	// file tree
+	http.HandleFunc(conf.Wide.Context+"/files", handlerWrapper(file.GetFiles))
+	http.HandleFunc(conf.Wide.Context+"/file/refresh", handlerWrapper(file.RefreshDirectory))
+	http.HandleFunc(conf.Wide.Context+"/file", handlerWrapper(file.GetFile))
+	http.HandleFunc(conf.Wide.Context+"/file/save", handlerWrapper(file.SaveFile))
+	http.HandleFunc(conf.Wide.Context+"/file/new", handlerWrapper(file.NewFile))
+	http.HandleFunc(conf.Wide.Context+"/file/remove", handlerWrapper(file.RemoveFile))
+	http.HandleFunc(conf.Wide.Context+"/file/rename", handlerWrapper(file.RenameFile))
+	http.HandleFunc(conf.Wide.Context+"/file/search/text", handlerWrapper(file.SearchText))
+	http.HandleFunc(conf.Wide.Context+"/file/find/name", handlerWrapper(file.Find))
+
+	// outline
+	http.HandleFunc(conf.Wide.Context+"/outline", handlerWrapper(file.GetOutline))
+
+	// file export/import
+	http.HandleFunc(conf.Wide.Context+"/file/zip/new", handlerWrapper(file.CreateZip))
+	http.HandleFunc(conf.Wide.Context+"/file/zip", handlerWrapper(file.GetZip))
+	http.HandleFunc(conf.Wide.Context+"/file/upload", handlerWrapper(file.Upload))
+
+	// editor
+	http.HandleFunc(conf.Wide.Context+"/editor/ws", handlerWrapper(editor.WSHandler))
+	http.HandleFunc(conf.Wide.Context+"/go/fmt", handlerWrapper(editor.GoFmtHandler))
+	http.HandleFunc(conf.Wide.Context+"/autocomplete", handlerWrapper(editor.AutocompleteHandler))
+	http.HandleFunc(conf.Wide.Context+"/exprinfo", handlerWrapper(editor.GetExprInfoHandler))
+	http.HandleFunc(conf.Wide.Context+"/find/decl", handlerWrapper(editor.FindDeclarationHandler))
+	http.HandleFunc(conf.Wide.Context+"/find/usages", handlerWrapper(editor.FindUsagesHandler))
+
+	// shell
+	http.HandleFunc(conf.Wide.Context+"/shell/ws", handlerWrapper(shell.WSHandler))
+	http.HandleFunc(conf.Wide.Context+"/shell", handlerWrapper(shell.IndexHandler))
+
+	// notification
+	http.HandleFunc(conf.Wide.Context+"/notification/ws", handlerWrapper(notification.WSHandler))
+
+	// user
+	http.HandleFunc(conf.Wide.Context+"/login", handlerWrapper(session.LoginHandler))
+	http.HandleFunc(conf.Wide.Context+"/logout", handlerWrapper(session.LogoutHandler))
+	http.HandleFunc(conf.Wide.Context+"/signup", handlerWrapper(session.SignUpUser))
+	http.HandleFunc(conf.Wide.Context+"/preference", handlerWrapper(session.PreferenceHandler))
+
+	logger.Infof("Wide is running [%s]", conf.Wide.Server+conf.Wide.Context)
+
+	err := http.ListenAndServe(conf.Wide.Server, nil)
+	if err != nil {
+		logger.Error(err)
+	}
+}
+
 // indexHandler handles request of Wide index.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
+	if "/" != r.RequestURI {
+		http.NotFound(w, r)
+
+		return
+	}
+
 	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
 	if httpSession.IsNew {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
 
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
 	// create a Wide session
@@ -96,11 +198,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	wideSession := session.WideSessions.New(httpSession, sid)
 
 	username := httpSession.Values["username"].(string)
-	user := conf.Wide.GetUser(username)
+	user := conf.GetUser(username)
 	if nil == user {
-		glog.Warningf("Not found user [%s]", username)
+		logger.Warnf("Not found user [%s]", username)
 
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
@@ -114,12 +216,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		"pathSeparator": conf.PathSeparator, "codeMirrorVer": conf.CodeMirrorVer,
 		"user": user, "editorThemes": conf.GetEditorThemes()}
 
-	glog.V(3).Infof("User [%s] has [%d] sessions", username, len(wideSessions))
+	logger.Debugf("User [%s] has [%d] sessions", username, len(wideSessions))
 
 	t, err := template.ParseFiles("views/index.html")
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -139,22 +241,25 @@ func serveSingle(pattern string, filename string) {
 func startHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
 	if httpSession.IsNew {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
 
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
 	username := httpSession.Values["username"].(string)
-	locale := conf.Wide.GetUser(username).Locale
-	userWorkspace := conf.Wide.GetUserWorkspace(username)
+	locale := conf.GetUser(username).Locale
+	userWorkspace := conf.GetUserWorkspace(username)
 
 	sid := r.URL.Query()["sid"][0]
 	wSession := session.WideSessions.Get(sid)
 	if nil == wSession {
-		glog.Errorf("Session [%s] not found", sid)
+		logger.Errorf("Session [%s] not found", sid)
 	}
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale,
@@ -163,7 +268,7 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("views/start.html")
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -176,23 +281,26 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 func keyboardShortcutsHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
 	if httpSession.IsNew {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
 
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
 	username := httpSession.Values["username"].(string)
-	locale := conf.Wide.GetUser(username).Locale
+	locale := conf.GetUser(username).Locale
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale}
 
 	t, err := template.ParseFiles("views/keyboard_shortcuts.html")
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
@@ -205,16 +313,19 @@ func keyboardShortcutsHandler(w http.ResponseWriter, r *http.Request) {
 func aboutHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
 	if httpSession.IsNew {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
 
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
 	username := httpSession.Values["username"].(string)
-	locale := conf.Wide.GetUser(username).Locale
+	locale := conf.GetUser(username).Locale
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale,
 		"ver": conf.WideVersion, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "gover": runtime.Version()}
@@ -222,95 +333,13 @@ func aboutHandler(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("views/about.html")
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		http.Error(w, err.Error(), 500)
 
 		return
 	}
 
 	t.Execute(w, model)
-}
-
-// Main.
-func main() {
-	runtime.GOMAXPROCS(conf.Wide.MaxProcs)
-
-	initMime()
-
-	defer glog.Flush()
-
-	// IDE
-	http.HandleFunc("/", handlerWrapper(indexHandler))
-	http.HandleFunc("/start", handlerWrapper(startHandler))
-	http.HandleFunc("/about", handlerWrapper(aboutHandler))
-	http.HandleFunc("/keyboard_shortcuts", handlerWrapper(keyboardShortcutsHandler))
-
-	// static resources
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	serveSingle("/favicon.ico", "./static/favicon.ico")
-
-	// workspaces
-	for _, user := range conf.Wide.Users {
-		http.Handle("/workspace/"+user.Name+"/",
-			http.StripPrefix("/workspace/"+user.Name+"/", http.FileServer(http.Dir(user.GetWorkspace()))))
-	}
-
-	// session
-	http.HandleFunc("/session/ws", handlerWrapper(session.WSHandler))
-	http.HandleFunc("/session/save", handlerWrapper(session.SaveContent))
-
-	// run
-	http.HandleFunc("/build", handlerWrapper(output.BuildHandler))
-	http.HandleFunc("/run", handlerWrapper(output.RunHandler))
-	http.HandleFunc("/stop", handlerWrapper(output.StopHandler))
-	http.HandleFunc("/go/test", handlerWrapper(output.GoTestHandler))
-	http.HandleFunc("/go/get", handlerWrapper(output.GoGetHandler))
-	http.HandleFunc("/go/install", handlerWrapper(output.GoInstallHandler))
-	http.HandleFunc("/output/ws", handlerWrapper(output.WSHandler))
-
-	// file tree
-	http.HandleFunc("/files", handlerWrapper(file.GetFiles))
-	http.HandleFunc("/file/refresh", handlerWrapper(file.RefreshDirectory))
-	http.HandleFunc("/file", handlerWrapper(file.GetFile))
-	http.HandleFunc("/file/save", handlerWrapper(file.SaveFile))
-	http.HandleFunc("/file/new", handlerWrapper(file.NewFile))
-	http.HandleFunc("/file/remove", handlerWrapper(file.RemoveFile))
-	http.HandleFunc("/file/rename", handlerWrapper(file.RenameFile))
-	http.HandleFunc("/file/search/text", handlerWrapper(file.SearchText))
-	http.HandleFunc("/file/find/name", handlerWrapper(file.Find))
-
-	// file export/import
-	http.HandleFunc("/file/zip/new", handlerWrapper(file.CreateZip))
-	http.HandleFunc("/file/zip", handlerWrapper(file.GetZip))
-	http.HandleFunc("/file/upload", handlerWrapper(file.Upload))
-
-	// editor
-	http.HandleFunc("/editor/ws", handlerWrapper(editor.WSHandler))
-	http.HandleFunc("/go/fmt", handlerWrapper(editor.GoFmtHandler))
-	http.HandleFunc("/autocomplete", handlerWrapper(editor.AutocompleteHandler))
-	http.HandleFunc("/exprinfo", handlerWrapper(editor.GetExprInfoHandler))
-	http.HandleFunc("/find/decl", handlerWrapper(editor.FindDeclarationHandler))
-	http.HandleFunc("/find/usages", handlerWrapper(editor.FindUsagesHandler))
-
-	// shell
-	http.HandleFunc("/shell/ws", handlerWrapper(shell.WSHandler))
-	http.HandleFunc("/shell", handlerWrapper(shell.IndexHandler))
-
-	// notification
-	http.HandleFunc("/notification/ws", handlerWrapper(notification.WSHandler))
-
-	// user
-	http.HandleFunc("/login", handlerWrapper(session.LoginHandler))
-	http.HandleFunc("/logout", handlerWrapper(session.LogoutHandler))
-	http.HandleFunc("/signup", handlerWrapper(session.SignUpUser))
-	http.HandleFunc("/preference", handlerWrapper(session.PreferenceHandler))
-
-	glog.Infof("Wide is running [%s]", conf.Wide.Server)
-
-	err := http.ListenAndServe(conf.Wide.Server, nil)
-	if err != nil {
-		glog.Fatal(err)
-	}
 }
 
 // handlerWrapper wraps the HTTP Handler for some common processes.
@@ -324,6 +353,39 @@ func handlerWrapper(f func(w http.ResponseWriter, r *http.Request)) func(w http.
 	handler = i18nLoad(handler)
 
 	return handler
+}
+
+// handlerGzWrapper wraps the HTTP Handler for some common processes.
+//
+//  1. panic recover
+//  2. gzip response
+//  3. request stopwatch
+//  4. i18n
+func handlerGzWrapper(f func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	handler := panicRecover(f)
+	handler = gzipWrapper(handler)
+	handler = stopwatch(handler)
+	handler = i18nLoad(handler)
+
+	return handler
+}
+
+// gzipWrapper wraps the process with response gzip.
+func gzipWrapper(f func(http.ResponseWriter, *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			f(w, r)
+
+			return
+		}
+
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		gzr := gzipResponseWriter{Writer: gz, ResponseWriter: w}
+
+		f(gzr, r)
+	}
 }
 
 // i18nLoad wraps the i18n process.
@@ -341,7 +403,7 @@ func stopwatch(handler func(w http.ResponseWriter, r *http.Request)) func(w http
 		start := time.Now()
 
 		defer func() {
-			glog.V(5).Infof("[%s] [%s]", r.RequestURI, time.Since(start))
+			logger.Tracef("[%s, %s, %s]", r.Method, r.RequestURI, time.Since(start))
 		}()
 
 		handler(w, r)
@@ -364,4 +426,20 @@ func initMime() {
 	mime.AddExtensionType(".css", "text/css")
 	mime.AddExtensionType(".js", "application/x-javascript")
 	mime.AddExtensionType(".json", "application/json")
+}
+
+// gzipResponseWriter represents a gzip response writer.
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+// Write writes response with appropriate 'Content-Type'.
+func (w gzipResponseWriter) Write(b []byte) (int, error) {
+	if "" == w.Header().Get("Content-Type") {
+		// If no content type, apply sniffing algorithm to un-gzipped body.
+		w.Header().Set("Content-Type", http.DetectContentType(b))
+	}
+
+	return w.Writer.Write(b)
 }

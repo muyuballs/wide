@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package session
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"math/rand"
 	"net/http"
@@ -22,39 +24,46 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"github.com/b3log/wide/conf"
 	"github.com/b3log/wide/i18n"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
 
 const (
-	UserExists      = "user exists"
-	UserCreated     = "user created"
-	UserCreateError = "user create error"
+	// TODO: i18n
+
+	userExists      = "user exists"
+	emailExists     = "email exists"
+	userCreated     = "user created"
+	userCreateError = "user create error"
 )
 
 // Exclusive lock for adding user.
 var addUserMutex sync.Mutex
 
-// PreferenceHandle handles request of preference page.
+// PreferenceHandler handles request of preference page.
 func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession, _ := HTTPSession.Get(r, "wide-session")
 
 	if httpSession.IsNew {
-		http.Redirect(w, r, "/preference", http.StatusFound)
+		http.Redirect(w, r, conf.Wide.Context+"login", http.StatusFound)
 
 		return
 	}
 
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
 	username := httpSession.Values["username"].(string)
-	user := conf.Wide.GetUser(username)
+	user := conf.GetUser(username)
 
 	if "GET" == r.Method {
 		model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(user.Locale), "user": user,
@@ -65,7 +74,7 @@ func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 		t, err := template.ParseFiles("views/preference.html")
 
 		if nil != err {
-			glog.Error(err)
+			logger.Error(err)
 			http.Error(w, err.Error(), 500)
 
 			return
@@ -89,6 +98,7 @@ func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 		Workspace        string
 		Username         string
 		Password         string
+		Email            string
 		Locale           string
 		Theme            string
 		EditorFontFamily string
@@ -99,7 +109,7 @@ func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 	}{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		succ = false
 
 		return
@@ -108,8 +118,17 @@ func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 	user.FontFamily = args.FontFamily
 	user.FontSize = args.FontSize
 	user.GoFormat = args.GoFmt
-	user.Workspace = args.Workspace
-	user.Password = args.Password
+	// XXX: disallow change workspace at present
+	// user.Workspace = args.Workspace
+	if user.Password != args.Password {
+		user.Password = conf.Salt(args.Password, user.Salt)
+	}
+	user.Email = args.Email
+
+	hash := md5.New()
+	hash.Write([]byte(user.Email))
+	user.Gravatar = hex.EncodeToString(hash.Sum(nil))
+
 	user.Locale = args.Locale
 	user.Theme = args.Theme
 	user.Editor.FontFamily = args.EditorFontFamily
@@ -120,7 +139,11 @@ func PreferenceHandler(w http.ResponseWriter, r *http.Request) {
 
 	conf.UpdateCustomizedConf(username)
 
-	succ = conf.Save()
+	now := time.Now().UnixNano()
+	user.Lived = now
+	user.Updated = now
+
+	succ = user.Save()
 }
 
 // LoginHandler handles request of user login.
@@ -129,12 +152,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		// show the login page
 
 		model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(conf.Wide.Locale),
-			"locale": conf.Wide.Locale, "ver": conf.WideVersion}
+			"locale": conf.Wide.Locale, "ver": conf.WideVersion, "year": time.Now().Year()}
 
 		t, err := template.ParseFiles("views/login.html")
 
 		if nil != err {
-			glog.Error(err)
+			logger.Error(err)
 			http.Error(w, err.Error(), 500)
 
 			return
@@ -157,15 +180,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error("login error: ", err)
 		succ = false
 
 		return
 	}
 
 	succ = false
-	for _, user := range conf.Wide.Users {
-		if user.Name == args.Username && user.Password == args.Password {
+	for _, user := range conf.Users {
+		if user.Name == args.Username && user.Password == conf.Salt(args.Password, user.Salt) {
 			succ = true
 
 			break
@@ -181,9 +204,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession.Values["username"] = args.Username
 	httpSession.Values["id"] = strconv.Itoa(rand.Int())
 	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
 	httpSession.Save(r, w)
 
-	glog.Infof("Created a HTTP session [%s] for user [%s]", httpSession.Values["id"].(string), args.Username)
+	logger.Debugf("Created a HTTP session [%s] for user [%s]", httpSession.Values["id"].(string), args.Username)
 }
 
 // LogoutHandler handles request of user logout (exit).
@@ -202,17 +228,17 @@ func SignUpUser(w http.ResponseWriter, r *http.Request) {
 	if "GET" == r.Method {
 		// show the user sign up page
 
-		firstUserWorkspace := conf.Wide.GetUserWorkspace(conf.Wide.Users[0].Name)
+		firstUserWorkspace := conf.GetUserWorkspace(conf.Users[0].Name)
 		dir := filepath.Dir(firstUserWorkspace)
 
 		model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(conf.Wide.Locale),
 			"locale": conf.Wide.Locale, "ver": conf.WideVersion, "dir": dir,
-			"pathSeparator": conf.PathSeparator}
+			"pathSeparator": conf.PathSeparator, "year": time.Now().Year()}
 
 		t, err := template.ParseFiles("views/sign_up.html")
 
 		if nil != err {
-			glog.Error(err)
+			logger.Error(err)
 			http.Error(w, err.Error(), 500)
 
 			return
@@ -232,7 +258,7 @@ func SignUpUser(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		succ = false
 
 		return
@@ -240,41 +266,96 @@ func SignUpUser(w http.ResponseWriter, r *http.Request) {
 
 	username := args["username"].(string)
 	password := args["password"].(string)
+	email := args["email"].(string)
 
-	msg := addUser(username, password)
-	if UserCreated != msg {
+	msg := addUser(username, password, email)
+	if userCreated != msg {
 		succ = false
 		data["msg"] = msg
+
+		return
 	}
+
+	// create a HTTP session
+	httpSession, _ := HTTPSession.Get(r, "wide-session")
+	httpSession.Values["username"] = username
+	httpSession.Values["id"] = strconv.Itoa(rand.Int())
+	httpSession.Options.MaxAge = conf.Wide.HTTPSessionMaxAge
+	if "" != conf.Wide.Context {
+		httpSession.Options.Path = conf.Wide.Context
+	}
+	httpSession.Save(r, w)
 }
 
-// addUser add a user with the specified username and password.
+// FixedTimeSave saves online users' configurations periodically (1 minute).
+//
+// Main goal of this function is to save user session content, for restoring session content while user open Wide next time.
+func FixedTimeSave() {
+	go func() {
+		for _ = range time.Tick(time.Minute) {
+			users := getOnlineUsers()
+
+			for _, u := range users {
+				if u.Save() {
+					logger.Tracef("Saved online user [%s]'s configurations", u.Name)
+				}
+			}
+		}
+	}()
+}
+
+func getOnlineUsers() []*conf.User {
+	ret := []*conf.User{}
+
+	usernames := map[string]string{} // distinct username
+	for _, s := range WideSessions {
+		usernames[s.Username] = s.Username
+	}
+
+	for _, username := range usernames {
+		u := conf.GetUser(username)
+
+		if nil == u {
+			logger.Warnf("Not found user [%s]", username)
+
+			continue
+		}
+
+		ret = append(ret, u)
+	}
+
+	return ret
+}
+
+// addUser add a user with the specified username, password and email.
 //
 //  1. create the user's workspace
-//  2. generate 'Hello, 世界' demo code in the workspace
+//  2. generate 'Hello, 世界' demo code in the workspace (a console version and a http version)
 //  3. update the user customized configurations, such as style.css
 //  4. serve files of the user's workspace via HTTP
-func addUser(username, password string) string {
+func addUser(username, password, email string) string {
 	addUserMutex.Lock()
 	defer addUserMutex.Unlock()
 
-	for _, user := range conf.Wide.Users {
-		if user.Name == username {
-			return UserExists
+	for _, user := range conf.Users {
+		if strings.ToLower(user.Name) == strings.ToLower(username) {
+			return userExists
+		}
+
+		if strings.ToLower(user.Email) == strings.ToLower(email) {
+			return emailExists
 		}
 	}
 
-	firstUserWorkspace := conf.Wide.GetUserWorkspace(conf.Wide.Users[0].Name)
+	firstUserWorkspace := conf.GetUserWorkspace(conf.Users[0].Name)
 	dir := filepath.Dir(firstUserWorkspace)
 	workspace := filepath.Join(dir, username)
 
-	newUser := &conf.User{Name: username, Password: password, Workspace: workspace,
-		Locale: conf.Wide.Locale, GoFormat: "gofmt", FontFamily: "Helvetica", FontSize: "13px",
-		Editor: &conf.Editor{FontFamily: "Consolas, 'Courier New', monospace", FontSize: "inherit"}}
-	conf.Wide.Users = append(conf.Wide.Users, newUser)
+	newUser := conf.NewUser(username, password, email, workspace)
+	conf.Users = append(conf.Users, newUser)
 
-	if !conf.Save() {
-		return UserCreateError
+	if !newUser.Save() {
+		return userCreateError
 	}
 
 	conf.CreateWorkspaceDir(workspace)
@@ -284,25 +365,32 @@ func addUser(username, password string) string {
 	http.Handle("/workspace/"+username+"/",
 		http.StripPrefix("/workspace/"+username+"/", http.FileServer(http.Dir(newUser.GetWorkspace()))))
 
-	glog.Infof("Created a user [%s]", username)
+	logger.Infof("Created a user [%s]", username)
 
-	return UserCreated
+	return userCreated
 }
 
-// helloWorld generates the 'Hello, 世界' source code in workspace/src/hello/main.go.
+// helloWorld generates the 'Hello, 世界' source code.
+//  1. src/hello/main.go
+//  2. src/web/main.go
 func helloWorld(workspace string) {
+	consoleHello(workspace)
+	webHello(workspace)
+}
+
+func consoleHello(workspace string) {
 	dir := workspace + conf.PathSeparator + "src" + conf.PathSeparator + "hello"
 	if err := os.MkdirAll(dir, 0755); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
 		return
 	}
 
 	fout, err := os.Create(dir + conf.PathSeparator + "main.go")
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
-		os.Exit(-1)
+		return
 	}
 
 	fout.WriteString(`package main
@@ -313,6 +401,59 @@ func main() {
 	fmt.Println("Hello, 世界")
 }
 `)
+
+	fout.Close()
+}
+
+func webHello(workspace string) {
+	dir := workspace + conf.PathSeparator + "src" + conf.PathSeparator + "web"
+	if err := os.MkdirAll(dir, 0755); nil != err {
+		logger.Error(err)
+
+		return
+	}
+
+	fout, err := os.Create(dir + conf.PathSeparator + "main.go")
+	if nil != err {
+		logger.Error(err)
+
+		return
+	}
+
+	code := `package main
+
+import (
+	"fmt"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+func main() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, 世界"))
+	})
+
+	port := getPort()
+
+	// you may need to change the address
+	fmt.Println("Open http://wide.b3log.org:" + port + " in your browser to see the result") 
+
+	if err := http.ListenAndServe(":"+port, nil); nil != err {
+		fmt.Println(err)
+	}
+}
+
+func getPort() string {
+	rand.Seed(time.Now().UnixNano())
+
+	return strconv.Itoa(7000 + rand.Intn(8000-7000))
+}
+
+`
+
+	fout.WriteString(code)
 
 	fout.Close()
 }

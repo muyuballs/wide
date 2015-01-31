@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"github.com/b3log/wide/conf"
 	"github.com/b3log/wide/session"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
 
 // GoFmtHandler handles request of formatting Go source code.
@@ -46,7 +45,7 @@ func GoFmtHandler(w http.ResponseWriter, r *http.Request) {
 	var args map[string]interface{}
 
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -62,7 +61,7 @@ func GoFmtHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err := os.Create(filePath)
 
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
@@ -72,13 +71,13 @@ func GoFmtHandler(w http.ResponseWriter, r *http.Request) {
 
 	fout.WriteString(code)
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return
 	}
 
-	fmt := conf.Wide.GetGoFmt(username)
+	fmt := conf.GetGoFmt(username)
 
 	argv := []string{filePath}
 	cmd := exec.Command(fmt, argv...)
@@ -99,7 +98,7 @@ func GoFmtHandler(w http.ResponseWriter, r *http.Request) {
 	fout, err = os.Create(filePath)
 	fout.WriteString(code)
 	if err := fout.Close(); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 		data["succ"] = false
 
 		return

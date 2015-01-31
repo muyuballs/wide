@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,33 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Notification manipulations.
+// Package notification includes notification related manipulations.
 package notification
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/b3log/wide/conf"
 	"github.com/b3log/wide/event"
 	"github.com/b3log/wide/i18n"
+	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/session"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
 
 const (
-	Error = "ERROR" // notification.severity: ERROR
-	Warn  = "WARN"  // notification.severity: WARN
-	Info  = "INFO"  // notification.severity: INFO
+	error = "ERROR" // notification.severity: ERROR
+	warn  = "WARN"  // notification.severity: WARN
+	info  = "INFO"  // notification.severity: INFO
 
-	Setup  = "Setup"  // notification.type: setup
-	Server = "Server" // notification.type: server
+	setup  = "Setup"  // notification.type: setup
+	server = "Server" // notification.type: server
 )
 
-// Notification.
+// Logger.
+var logger = log.NewLogger(os.Stdout)
+
+// Notification represents a notification.
 type Notification struct {
 	event    *event.Event
 	Type     string `json:"type"`
@@ -60,7 +64,7 @@ func event2Notification(e *event.Event) {
 
 	httpSession, _ := session.HTTPSession.Get(wsChannel.Request, "wide-session")
 	username := httpSession.Values["username"].(string)
-	locale := conf.Wide.GetUser(username).Locale
+	locale := conf.GetUser(username).Locale
 
 	var notification *Notification
 
@@ -68,13 +72,13 @@ func event2Notification(e *event.Event) {
 	case event.EvtCodeGocodeNotFound:
 		fallthrough
 	case event.EvtCodeIDEStubNotFound:
-		notification = &Notification{event: e, Type: Setup, Severity: Error,
+		notification = &Notification{event: e, Type: setup, Severity: error,
 			Message: i18n.Get(locale, "notification_"+strconv.Itoa(e.Code)).(string)}
 	case event.EvtCodeServerInternalError:
-		notification = &Notification{event: e, Type: Server, Severity: Error,
+		notification = &Notification{event: e, Type: server, Severity: error,
 			Message: i18n.Get(locale, "notification_"+strconv.Itoa(e.Code)).(string) + " [" + e.Data.(string) + "]"}
 	default:
-		glog.Warningf("Can't handle event[code=%d]", e.Code)
+		logger.Warnf("Can't handle event[code=%d]", e.Code)
 
 		return
 	}
@@ -105,7 +109,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 	session.NotificationWS[sid] = &wsChan
 
-	glog.V(4).Infof("Open a new [Notification] with session [%s], %d", sid, len(session.NotificationWS))
+	logger.Tracef("Open a new [Notification] with session [%s], %d", sid, len(session.NotificationWS))
 
 	// add user event handler
 	wSession.EventQueue.AddHandler(event.HandleFunc(event2Notification))

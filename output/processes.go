@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"github.com/b3log/wide/session"
-	"github.com/golang/glog"
 )
 
 // Type of process set.
@@ -38,7 +37,7 @@ func (procs *procs) add(wSession *session.WideSession, proc *os.Process) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	sid := wSession.Id
+	sid := wSession.ID
 	userProcesses := (*procs)[sid]
 
 	userProcesses = append(userProcesses, proc)
@@ -47,7 +46,7 @@ func (procs *procs) add(wSession *session.WideSession, proc *os.Process) {
 	// bind process with wide session
 	wSession.SetProcesses(userProcesses)
 
-	glog.V(5).Infof("Session [%s] has [%d] processes", sid, len((*procs)[sid]))
+	logger.Tracef("Session [%s] has [%d] processes", sid, len((*procs)[sid]))
 }
 
 // remove removes the specified process from the user process set.
@@ -55,7 +54,7 @@ func (procs *procs) remove(wSession *session.WideSession, proc *os.Process) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	sid := wSession.Id
+	sid := wSession.ID
 
 	userProcesses := (*procs)[sid]
 
@@ -68,7 +67,7 @@ func (procs *procs) remove(wSession *session.WideSession, proc *os.Process) {
 			// bind process with wide session
 			wSession.SetProcesses(newProcesses)
 
-			glog.V(5).Infof("Session [%s] has [%d] processes", sid, len((*procs)[sid]))
+			logger.Tracef("Session [%s] has [%d] processes", sid, len((*procs)[sid]))
 
 			return
 		}
@@ -80,14 +79,14 @@ func (procs *procs) kill(wSession *session.WideSession, pid int) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	sid := wSession.Id
+	sid := wSession.ID
 
 	userProcesses := (*procs)[sid]
 
 	for i, p := range userProcesses {
 		if p.Pid == pid {
 			if err := p.Kill(); nil != err {
-				glog.Error("Kill a process [pid=%d] of session [%s] failed [error=%v]", pid, sid, err)
+				logger.Errorf("Kill a process [pid=%d] of user [%s, %s] failed [error=%v]", pid, wSession.Username, sid, err)
 			} else {
 				var newProcesses []*os.Process
 
@@ -97,7 +96,7 @@ func (procs *procs) kill(wSession *session.WideSession, pid int) {
 				// bind process with wide session
 				wSession.SetProcesses(newProcesses)
 
-				glog.V(5).Infof("Killed a process [pid=%d] of session [%s]", pid, sid)
+				logger.Debugf("Killed a process [pid=%d] of user [%s, %s]", pid, wSession.Username, sid)
 			}
 
 			return

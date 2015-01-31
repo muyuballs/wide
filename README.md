@@ -1,6 +1,8 @@
-# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg)](https://travis-ci.org/b3log/wide) [![API Documentation](http://img.shields.io/badge/api-Godoc-blue.svg)](http://godoc.org/github.com/b3log/wide) [![Apache License](http://img.shields.io/badge/license-ALv2-orange.svg)](http://www.apache.org/licenses/LICENSE-2.0)
+# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg?style=flat)](https://travis-ci.org/b3log/wide) [![Coverage Status](https://img.shields.io/coveralls/b3log/wide.svg?style=flat)](https://coveralls.io/r/b3log/wide) [![Apache License](http://img.shields.io/badge/license-apache2-orange.svg?style=flat)](http://www.apache.org/licenses/LICENSE-2.0) [![API Documentation](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](http://godoc.org/github.com/b3log/wide) [![Download](http://img.shields.io/badge/download-~1K-red.svg?style=flat)](http://pan.baidu.com/s/1dD3XwOT)
 
-_Have a [**try**](http://121.41.106.121:7070/signup) first, and then help us to make it [happen](http://igg.me/at/widehub)!_
+_Have a [**try**](http://wide.b3log.org/signup) first, then [download](http://pan.baidu.com/s/1dD3XwOT) and setup it on your local area network, enjoy yourself!_
+
+先试试我们搭建好的[**在线服务**](http://wide.b3log.org/signup)，好用的话你可以在这里[下载](http://pan.baidu.com/s/1dD3XwOT)并在本地环境运行，然后邀请你的小伙伴们加入吧！
 
 ## Intro
 
@@ -35,15 +37,32 @@ A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
 * [X] Autocomplete: Go/HTML etc.
 * [X] Format: Go/HTML/JSON etc.
 * [X] Build & Run
-* [ ] Debug
 * [X] Multiplayer: a real team development experience
 * [X] Navigation, Jump to declaration, Find usages, File search etc.
 * [X] Shell: run command on the server
-* [ ] Git integration: git command on the web
 * [X] Web development: Frontend devlopment (HTML/JS/CSS) all in one
 * [X] Go tool: go get/install/fmt etc.
 * [X] File Import & Export
 * [X] Themes
+* [ ] Debug
+* [ ] Git integration: git command on the web
+
+## Screenshots
+
+* **Overview**
+  ![Overview](https://cloud.githubusercontent.com/assets/873584/5450620/1d51831e-8543-11e4-930b-670871902425.png)
+* **Goto File**
+  ![Goto File](https://cloud.githubusercontent.com/assets/873584/5450616/1d495da6-8543-11e4-9285-f9d9c60779ac.png)
+* **Autocomplete**
+  ![Autocomplete](https://cloud.githubusercontent.com/assets/873584/5450619/1d4d5712-8543-11e4-8fe4-35dbc8348a6e.png)
+* **Theme**
+  ![4](https://cloud.githubusercontent.com/assets/873584/5450617/1d4c0826-8543-11e4-8b86-f79a4e41550a.png)
+* **Show Expression Info**
+  ![Show Expression Info](https://cloud.githubusercontent.com/assets/873584/5450618/1d4cd9f4-8543-11e4-950f-121bd3ff4a39.png)
+* **Build Error Info**
+  ![Build Error Info](https://cloud.githubusercontent.com/assets/873584/5450632/3e51cccc-8543-11e4-8ca8-8d2427aa16b8.png)
+* **About**
+  ![About](https://cloud.githubusercontent.com/assets/873584/5521709/87ce85a8-89e3-11e4-87b2-4870a426dfcd.png)
 
 ## Architecture 
 
@@ -69,7 +88,7 @@ Flow:
 ![Code Assist](https://cloud.githubusercontent.com/assets/873584/4399135/3b80c21c-4463-11e4-8e94-7f7e8d12a4df.png)
 
  * Autocompletion
- * Find Usages
+ * Find Usages/Jump To Declaration/etc.
 
 Flow: 
  1. Browser sends code assist request
@@ -82,16 +101,6 @@ Flow:
 
 * [用户指南](http://88250.gitbooks.io/wide-user-guide)
 * [开发指南](http://88250.gitbooks.io/wide-dev-guide)
-
-## Demos
-
-* 20141024-1.0.0, png ![](http://b3log.org/wide/demo/20141024.png)
-
-### Olds
-* [20140927, png](http://b3log.org/wide/demo/20140927.png)
-* [20140913, png](http://b3log.org/wide/demo/20140913.png)
-* [20140910, png](http://b3log.org/wide/demo/20140910.png)
-* [20140823, swf](http://b3log.org/wide/demo/20140823.html)
 
 ## Setup
 
@@ -117,17 +126,19 @@ Download [HERE](http://pan.baidu.com/s/1dD3XwOT)!
 ### Docker
 
 1. Get image: `sudo docker pull 88250/wide:latest`
-2. Run: `sudo docker run -u wide -p {ip}:{port}:7070 88250/wide:latest ./wide -docker=true -channel=ws://{ip}:{port}`
+2. Run: `sudo docker run -p 127.0.0.1:7070:7070 88250/wide:latest ./wide -docker=true -channel=ws://127.0.0.1:7070`
+3. Open browser: http://127.0.0.1:7070
 
 ## Known Issues
 
 * [Shell is not available on Windows](https://github.com/b3log/wide/issues/32)
 
-## License
+## Terms
 
-Copyright (c) 2014, B3log Team (http://b3log.org)
-
-Licensed under the [Apache License 2.0](https://github.com/b3log/wide/blob/master/LICENSE).
+* This software is open sourced under the Apache License 2.0
+* You can not get rid of the "Powered by [B3log](http://b3log.org)" from any pages, even the pages are developed by you 
+* If you want to use this software for commercial purpose, please mail to support@liuyun.io for request a commercial license
+* Copyright (c) b3log.org, all rights reserved
 
 ## Credits
 

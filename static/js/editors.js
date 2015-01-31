@@ -1,12 +1,12 @@
-/* 
- * Copyright (c) 2014, B3log
- *  
+/*
+ * Copyright (c) 2014-2015, b3log.org
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,13 @@
 var editors = {
     data: [],
     tabs: {},
+    getEditorByPath: function (path) {
+        for (var i = 0, ii = editors.data.length; i < ii; i++) {
+            if (editors.data[i].editor.options.path === path) {
+                return editors.data[i].editor;
+            }
+        }
+    },
     close: function () {
         $(".edit-panel .tabs > div[data-index=" + $(".edit-panel .frame").data("index") + "]").find(".ico-close").click();
     },
@@ -45,12 +52,15 @@ var editors = {
             $("#dialogCloseEditor").data("removeData", removeData);
             $(".edit-panel .tabs > div[data-index=" + removeIndex + "] .ico-close").click();
         }
+        if (wide.curEditor) {
+            wide.curEditor.focus();
+        }
     },
     _initClose: function () {
-       new ZeroClipboard($("#copyFilePath"));
+        new ZeroClipboard($("#copyFilePath"));
 
         // 关闭、关闭其他、关闭所有
-        $(".edit-panel").on("mousedown", '.tabs > div', function (event) {
+        $(".edit-panel").on("mouseup", '.tabs > div', function (event) {
             event.stopPropagation();
 
             if (event.button === 0) { // 左键
@@ -75,7 +85,7 @@ var editors = {
     init: function () {
         $("#dialogCloseEditor").dialog({
             "modal": true,
-            "height": 66,
+            "height": 90,
             "width": 260,
             "title": config.label.tip,
             "hideFooter": true,
@@ -90,7 +100,6 @@ var editors = {
                     wide.fmt(tree.fileTree.getNodeByTId(editors.data[i].id).path, editors.data[i].editor);
                     editors.tabs.del(editors.data[i].id);
                     $("#dialogCloseEditor").dialog("close");
-
                     editors._removeAllMarker();
                 });
 
@@ -98,13 +107,11 @@ var editors = {
                     var i = $("#dialogCloseEditor").data("index");
                     editors.tabs.del(editors.data[i].id);
                     $("#dialogCloseEditor").dialog("close");
-
                     editors._removeAllMarker();
                 });
 
-                $("#dialogCloseEditor button.cancel").click(function () {
+                $("#dialogCloseEditor button.cancel").click(function (event) {
                     $("#dialogCloseEditor").dialog("close");
-
                     editors._removeAllMarker();
                 });
             }
@@ -112,9 +119,16 @@ var editors = {
 
         editors.tabs = new Tabs({
             id: ".edit-panel",
+            setAfter: function () {
+                if (wide.curEditor) {
+                    wide.curEditor.focus();
+                }
+            },
             clickAfter: function (id) {
                 if (id === 'startPage') {
+                    wide.curEditor = undefined;
                     $(".footer .cursor").text('');
+                    wide.refreshOutline();
                     return false;
                 }
 
@@ -133,6 +147,7 @@ var editors = {
                 var cursor = wide.curEditor.getCursor();
                 wide.curEditor.setCursor(cursor);
                 wide.curEditor.focus();
+                wide.refreshOutline();
 
                 $(".footer .cursor").text('|   ' + (cursor.line + 1) + ':' + (cursor.ch + 1) + '   |');
             },
@@ -164,10 +179,6 @@ var editors = {
                     menu.disabled(['close-all']);
                 }
 
-                if (id === 'startPage') { // 当前关闭的 tab 是起始页
-                    return false;
-                }
-
                 // 移除编辑器
                 for (var i = 0, ii = editors.data.length; i < ii; i++) {
                     if (editors.data[i].id === id) {
@@ -177,8 +188,10 @@ var editors = {
                 }
 
                 if (editors.data.length === 0) { // 起始页可能存在，所以用编辑器数据判断
-                    menu.disabled(['save-all', 'build', 'run', 'go-test', 'go-get', 'go-install']);
-                    $(".toolbars").hide();
+                    menu.disabled(['save-all', 'build', 'run', 'go-test', 'go-vet', 'go-get', 'go-install',
+                        'find', 'find-next', 'find-previous', 'replace', 'replace-all',
+                        'format', 'autocomplete', 'jump-to-decl', 'expr-info', 'find-usages', 'toggle-comment',
+                        'edit']);
                 }
 
                 if (!nextId) {
@@ -187,6 +200,7 @@ var editors = {
                     tree.fileTree.cancelSelectedNode();
                     wide.curNode = undefined;
                     wide.curEditor = undefined;
+                    wide.refreshOutline();
                     $(".footer .cursor").text('');
                     return false;
                 }
@@ -208,6 +222,7 @@ var editors = {
                     }
                 }
 
+                wide.refreshOutline();
                 var cursor = wide.curEditor.getCursor();
                 $(".footer .cursor").text('|   ' + (cursor.line + 1) + ':' + (cursor.ch + 1) + '   |');
             }
@@ -226,6 +241,10 @@ var editors = {
         this._initClose();
     },
     openStartPage: function () {
+        wide.curEditor = undefined;
+        wide.refreshOutline();
+        $(".footer .cursor").text('');
+        
         var dateFormat = function (time, fmt) {
             var date = new Date(time);
             var dateObj = {
@@ -249,12 +268,14 @@ var editors = {
 
         editors.tabs.add({
             id: "startPage",
-            title: '<span title="' + config.label.start_page + '">' + config.label.start_page + '</span>',
+            title: '<span title="' + config.label.start_page
+                    + '"><span class="ico-start font-ico"></span> ' + config.label.start_page + '</span>',
             content: '<div id="startPage"></div>',
             after: function () {
-                $("#startPage").load('/start?sid=' + config.wideSessionId);
+                $("#startPage").height($('.side-right').height() - $(".bottom-window-group").children(".tabs").height() - 100);
+                $("#startPage").load(config.context + '/start?sid=' + config.wideSessionId);
                 $.ajax({
-                    url: "http://symphony.b3log.org/apis/articles?tags=wide,golang&p=1&size=30",
+                    url: "https://symphony.b3log.org/apis/articles?tags=wide,golang&p=1&size=30",
                     type: "GET",
                     dataType: "jsonp",
                     jsonp: "callback",
@@ -326,7 +347,7 @@ var editors = {
             $.ajax({
                 async: false, // 同步执行
                 type: 'POST',
-                url: '/autocomplete',
+                url: config.context + '/autocomplete',
                 data: JSON.stringify(request),
                 dataType: "json",
                 success: function (data) {
@@ -334,33 +355,44 @@ var editors = {
 
                     if (autocompleteArray) {
                         for (var i = 0; i < autocompleteArray.length; i++) {
-                            var displayText = '';
+                            var displayText = '',
+                                    text = autocompleteArray[i].name;
 
                             switch (autocompleteArray[i].class) {
                                 case "type":
-                                case "const":
-                                case "var":
-                                case "package":
-                                    displayText = '<span class="fn-clear">'// + autocompleteArray[i].class 
-                                            + '<b class="fn-left">' + autocompleteArray[i].name + '</b>    '
+                                    displayText = '<span class="fn-clear"><span class="ico-type ico"></span>'// + autocompleteArray[i].class 
+                                            + '<b>' + autocompleteArray[i].name + '</b>    '
                                             + autocompleteArray[i].type + '</span>';
-
+                                    break;
+                                case "const":
+                                    displayText = '<span class="fn-clear"><span class="ico-const ico"></span>'// + autocompleteArray[i].class 
+                                            + '<b>' + autocompleteArray[i].name + '</b>    '
+                                            + autocompleteArray[i].type + '</span>';
+                                    break;
+                                case "var":
+                                    displayText = '<span class="fn-clear"><span class="ico-var ico"></span>'// + autocompleteArray[i].class 
+                                            + '<b>' + autocompleteArray[i].name + '</b>    '
+                                            + autocompleteArray[i].type + '</span>';
+                                    break;
+                                case "package":
+                                    displayText = '<span class="fn-clear"><span class="ico-package ico"></span>'// + autocompleteArray[i].class 
+                                            + '<b>' + autocompleteArray[i].name + '</b>    '
+                                            + autocompleteArray[i].type + '</span>';
                                     break;
                                 case "func":
-                                    displayText = '<span>'// + autocompleteArray[i].class 
+                                    displayText = '<span><span class="ico-func ico"></span>'// + autocompleteArray[i].class 
                                             + '<b>' + autocompleteArray[i].name + '</b>'
                                             + autocompleteArray[i].type.substring(4) + '</span>';
-
+                                    text += '()';
                                     break;
                                 default:
                                     console.warn("Can't handle autocomplete [" + autocompleteArray[i].class + "]");
-
                                     break;
                             }
 
                             autocompleteHints[i] = {
                                 displayText: displayText,
-                                text: autocompleteArray[i].name
+                                text: text
                             };
                         }
                     }
@@ -375,8 +407,14 @@ var editors = {
         });
 
         CodeMirror.commands.autocompleteAfterDot = function (cm) {
+            var mode = cm.getMode();
+            if (mode && "go" !== mode.name) {
+                return CodeMirror.Pass;
+            }
+            
             var token = cm.getTokenAt(cm.getCursor());
-            if ("comment" === token.type) {
+
+            if ("comment" === token.type || "string" === token.type) {
                 return CodeMirror.Pass;
             }
 
@@ -412,7 +450,7 @@ var editors = {
 
             $.ajax({
                 type: 'POST',
-                url: '/exprinfo',
+                url: config.context + '/exprinfo',
                 data: JSON.stringify(request),
                 dataType: "json",
                 success: function (data) {
@@ -427,6 +465,127 @@ var editors = {
             });
         };
 
+        CodeMirror.commands.copyLinesDown = function (cm) {
+            var content = '',
+                    selectoion = cm.listSelections()[0];
+
+            var from = selectoion.anchor,
+                    to = selectoion.head;
+            if (from.line > to.line) {
+                from = selectoion.head;
+                to = selectoion.anchor;
+            }
+
+            for (var i = from.line, max = to.line; i <= max; i++) {
+                if (to.ch !== 0 || i !== max) { // 下一行选中为0时，不应添加内容
+                    content += '\n' + cm.getLine(i);
+                }
+            }
+            // 下一行选中为0时，应添加到上一行末
+            var replaceToLine = to.line;
+            if (to.ch === 0) {
+                replaceToLine = to.line - 1;
+            }
+            cm.replaceRange(content, CodeMirror.Pos(replaceToLine));
+
+            var offset = replaceToLine - from.line + 1;
+            cm.setSelection(CodeMirror.Pos(from.line + offset, from.ch),
+                    CodeMirror.Pos(to.line + offset, to.ch));
+        };
+
+        CodeMirror.commands.copyLinesUp = function (cm) {
+            var content = '',
+                    selectoion = cm.listSelections()[0];
+
+            var from = selectoion.anchor,
+                    to = selectoion.head;
+            if (from.line > to.line) {
+                from = selectoion.head;
+                to = selectoion.anchor;
+            }
+
+            for (var i = from.line, max = to.line; i <= max; i++) {
+                if (to.ch !== 0 || i !== max) { // 下一行选中为0时，不应添加内容
+                    content += '\n' + cm.getLine(i);
+                }
+            }
+
+            // 下一行选中为0时，应添加到上一行末
+            var replaceToLine = to.line;
+            if (to.ch === 0) {
+                replaceToLine = to.line - 1;
+            }
+            cm.replaceRange(content, CodeMirror.Pos(replaceToLine));
+
+            cm.setSelection(CodeMirror.Pos(from.line, from.ch),
+                    CodeMirror.Pos(to.line, to.ch));
+        };
+
+        CodeMirror.commands.moveLinesUp = function (cm) {
+            var selectoion = cm.listSelections()[0];
+
+            var from = selectoion.anchor,
+                    to = selectoion.head;
+            if (from.line > to.line) {
+                from = selectoion.head;
+                to = selectoion.anchor;
+            }
+
+            if (from.line === 0) {
+                return false;
+            }
+            // 下一行选中为0时，应添加到上一行末
+            var replaceToLine = to.line;
+            if (to.ch === 0) {
+                replaceToLine = to.line - 1;
+            }
+            cm.replaceRange('\n' + cm.getLine(from.line - 1), CodeMirror.Pos(replaceToLine));
+            if (from.line === 1) {
+                // 移除第一行的换行
+                cm.replaceRange('', CodeMirror.Pos(0, 0),
+                        CodeMirror.Pos(1, 0));
+            } else {
+                cm.replaceRange('', CodeMirror.Pos(from.line - 2, cm.getLine(from.line - 2).length),
+                        CodeMirror.Pos(from.line - 1, cm.getLine(from.line - 1).length));
+            }
+
+            cm.setSelection(CodeMirror.Pos(from.line - 1, from.ch),
+                    CodeMirror.Pos(to.line - 1, to.ch));
+        };
+
+        CodeMirror.commands.moveLinesDown = function (cm) {
+            var selectoion = cm.listSelections()[0];
+
+            var from = selectoion.anchor,
+                    to = selectoion.head;
+            if (from.line > to.line) {
+                from = selectoion.head;
+                to = selectoion.anchor;
+            }
+
+            if (to.line === cm.lastLine()) {
+                return false;
+            }
+
+            // 下一行选中为0时，应添加到上一行末
+            var replaceToLine = to.line;
+            if (to.ch === 0) {
+                replaceToLine = to.line - 1;
+            }
+            // 把选中的下一行添加到选中区域的上一行
+            if (from.line === 0) {
+                cm.replaceRange(cm.getLine(replaceToLine + 1) + '\n', CodeMirror.Pos(0, 0));
+            } else {
+                cm.replaceRange('\n' + cm.getLine(replaceToLine + 1), CodeMirror.Pos(from.line - 1));
+            }
+            // 删除选中的下一行
+            cm.replaceRange('', CodeMirror.Pos(replaceToLine + 1, cm.getLine(replaceToLine + 1).length),
+                    CodeMirror.Pos(replaceToLine + 2, cm.getLine(replaceToLine + 2).length));
+
+            cm.setSelection(CodeMirror.Pos(from.line + 1, from.ch),
+                    CodeMirror.Pos(to.line + 1, to.ch));
+        };
+
         CodeMirror.commands.jumpToDecl = function (cm) {
             var cur = wide.curEditor.getCursor();
 
@@ -438,7 +597,7 @@ var editors = {
 
             $.ajax({
                 type: 'POST',
-                url: '/find/decl',
+                url: config.context + '/find/decl',
                 data: JSON.stringify(request),
                 dataType: "json",
                 success: function (data) {
@@ -466,7 +625,7 @@ var editors = {
 
             $.ajax({
                 type: 'POST',
-                url: '/find/usages',
+                url: config.context + '/find/usages',
                 data: JSON.stringify(request),
                 dataType: "json",
                 success: function (data) {
@@ -478,22 +637,42 @@ var editors = {
                 }
             });
         };
+
+        CodeMirror.commands.selectIdentifier = function (cm) {
+            var cur = cm.getCursor();
+            var word = cm.findWordAt(cur);
+            cm.extendSelection(word.anchor, word.head);
+        };
     },
     appendSearch: function (data, type, key) {
-        var searcHTML = '<ul class="list">';
+        var searcHTML = '<ul class="list">',
+                key = key.toLowerCase();
 
         for (var i = 0, ii = data.length; i < ii; i++) {
-            var contents = data[i].contents[0],
-                    index = contents.indexOf(key);
-            contents = contents.substring(0, index)
-                    + '<b>' + key + '</b>'
-                    + contents.substring(index + key.length);
+            var contents = '',
+                    lowerCaseContents = data[i].contents[0].toLowerCase(),
+                    matches = lowerCaseContents.split(key),
+                    startIndex = 0,
+                    endIndex = 0;
+            for (var j = 0, max = matches.length; j < max; j++) {
+                startIndex = endIndex + matches[j].length;
+                endIndex = startIndex + key.length;
+                var keyWord = data[i].contents[0].substring(startIndex, endIndex);
+                if (keyWord !== '') {
+                    keyWord = '<b>' + keyWord + '</b>';
+                }
+                contents += data[i].contents[0].substring(startIndex - matches[j].length, startIndex) + keyWord;
+            }
 
             searcHTML += '<li title="' + data[i].path + '">'
                     + contents + "&nbsp;&nbsp;&nbsp;&nbsp;<span class='ft-small'>" + data[i].path
                     + '<i class="position" data-line="'
                     + data[i].line + '" data-ch="' + data[i].ch + '"> (' + data[i].line + ':'
                     + data[i].ch + ')</i></span></li>';
+        }
+
+        if (data.length === 0) {
+            searcHTML += '<li>' + config.label.search_no_match + '</li>';
         }
         searcHTML += '</ul>';
 
@@ -556,7 +735,6 @@ var editors = {
     },
     // 新建一个编辑器 Tab，如果已经存在 Tab 则切换到该 Tab.
     newEditor: function (data, cursor) {
-        $(".toolbars").show();
         var id = wide.curNode.tId;
 
         editors.tabs.add({
@@ -566,7 +744,10 @@ var editors = {
             content: '<textarea id="editor' + id + '"></textarea>'
         });
 
-        menu.undisabled(['save-all', 'close-all', 'build', 'run', 'go-test', 'go-get', 'go-install']);
+        menu.undisabled(['save-all', 'close-all', 'build', 'run', 'go-test', 'go-vet', 'go-get', 'go-install',
+            'find', 'find-next', 'find-previous', 'replace', 'replace-all',
+            'format', 'autocomplete', 'jump-to-decl', 'expr-info', 'find-usages', 'toggle-comment',
+            'edit']);
 
         var textArea = document.getElementById("editor" + id);
         textArea.value = data.content;
@@ -588,6 +769,7 @@ var editors = {
             extraKeys: {
                 "Ctrl-\\": "autocompleteAnyWord",
                 ".": "autocompleteAfterDot",
+                "Ctrl-/": 'toggleComment',
                 "Ctrl-I": "exprInfo",
                 "Ctrl-L": "gotoLine",
                 "Ctrl-E": "deleteLine",
@@ -614,123 +796,11 @@ var editors = {
                         windows.maxEditor();
                     }
                 },
-                "Shift-Ctrl-Up": function (cm) {
-                    var content = '',
-                            selectoion = cm.listSelections()[0];
-
-                    var from = selectoion.anchor,
-                            to = selectoion.head;
-                    if (from.line > to.line) {
-                        from = selectoion.head;
-                        to = selectoion.anchor;
-                    }
-
-                    for (var i = from.line, max = to.line; i <= max; i++) {
-                        if (to.ch !== 0 || i !== max) { // 下一行选中为0时，不应添加内容
-                            content += '\n' + cm.getLine(i);
-                        }
-                    }
-
-                    // 下一行选中为0时，应添加到上一行末
-                    var replaceToLine = to.line;
-                    if (to.ch === 0) {
-                        replaceToLine = to.line - 1;
-                    }
-                    cm.replaceRange(content, CodeMirror.Pos(replaceToLine));
-
-                    cm.setSelection(CodeMirror.Pos(from.line, from.ch),
-                            CodeMirror.Pos(to.line, to.ch));
-                },
-                "Shift-Ctrl-Down": function (cm) {
-                    var content = '',
-                            selectoion = cm.listSelections()[0];
-
-                    var from = selectoion.anchor,
-                            to = selectoion.head;
-                    if (from.line > to.line) {
-                        from = selectoion.head;
-                        to = selectoion.anchor;
-                    }
-
-                    for (var i = from.line, max = to.line; i <= max; i++) {
-                        if (to.ch !== 0 || i !== max) { // 下一行选中为0时，不应添加内容
-                            content += '\n' + cm.getLine(i);
-                        }
-                    }
-                    // 下一行选中为0时，应添加到上一行末
-                    var replaceToLine = to.line;
-                    if (to.ch === 0) {
-                        replaceToLine = to.line - 1;
-                    }
-                    cm.replaceRange(content, CodeMirror.Pos(replaceToLine));
-
-                    var offset = replaceToLine - from.line + 1;
-                    cm.setSelection(CodeMirror.Pos(from.line + offset, from.ch),
-                            CodeMirror.Pos(to.line + offset, to.ch));
-                },
-                "Shift-Alt-Up": function (cm) {
-                    var selectoion = cm.listSelections()[0];
-
-                    var from = selectoion.anchor,
-                            to = selectoion.head;
-                    if (from.line > to.line) {
-                        from = selectoion.head;
-                        to = selectoion.anchor;
-                    }
-
-                    if (from.line === 0) {
-                        return false;
-                    }
-                    // 下一行选中为0时，应添加到上一行末
-                    var replaceToLine = to.line;
-                    if (to.ch === 0) {
-                        replaceToLine = to.line - 1;
-                    }
-                    cm.replaceRange('\n' + cm.getLine(from.line - 1), CodeMirror.Pos(replaceToLine));
-                    if (from.line === 1) {
-                        // 移除第一行的换行
-                        cm.replaceRange('', CodeMirror.Pos(0, 0),
-                                CodeMirror.Pos(1, 0));
-                    } else {
-                        cm.replaceRange('', CodeMirror.Pos(from.line - 2, cm.getLine(from.line - 2).length),
-                                CodeMirror.Pos(from.line - 1, cm.getLine(from.line - 1).length));
-                    }
-
-                    cm.setSelection(CodeMirror.Pos(from.line - 1, from.ch),
-                            CodeMirror.Pos(to.line - 1, to.ch));
-                },
-                "Shift-Alt-Down": function (cm) {
-                    var selectoion = cm.listSelections()[0];
-
-                    var from = selectoion.anchor,
-                            to = selectoion.head;
-                    if (from.line > to.line) {
-                        from = selectoion.head;
-                        to = selectoion.anchor;
-                    }
-
-                    if (to.line === cm.lastLine()) {
-                        return false;
-                    }
-
-                    // 下一行选中为0时，应添加到上一行末
-                    var replaceToLine = to.line;
-                    if (to.ch === 0) {
-                        replaceToLine = to.line - 1;
-                    }
-                    // 把选中的下一行添加到选中区域的上一行
-                    if (from.line === 0) {
-                        cm.replaceRange(cm.getLine(replaceToLine + 1) + '\n', CodeMirror.Pos(0, 0));
-                    } else {
-                        cm.replaceRange('\n' + cm.getLine(replaceToLine + 1), CodeMirror.Pos(from.line - 1));
-                    }
-                    // 删除选中的下一行
-                    cm.replaceRange('', CodeMirror.Pos(replaceToLine + 1, cm.getLine(replaceToLine + 1).length),
-                            CodeMirror.Pos(replaceToLine + 2, cm.getLine(replaceToLine + 2).length));
-
-                    cm.setSelection(CodeMirror.Pos(from.line + 1, from.ch),
-                            CodeMirror.Pos(to.line + 1, to.ch));
-                }
+                "Shift-Ctrl-Up": "copyLinesUp",
+                "Shift-Ctrl-Down": "copyLinesDown",
+                "Shift-Alt-Up": "moveLinesUp",
+                "Shift-Alt-Down": "moveLinesDown",
+                "Shift-Alt-J": "selectIdentifier"
             }
         });
 

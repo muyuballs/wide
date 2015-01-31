@@ -1,4 +1,4 @@
-// Copyright (c) 2014, B3log
+// Copyright (c) 2014-2015, b3log.org
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Configurations manipulations, all configurations (including user configurations) are stored in wide.json.
+// Package conf includes configurations related manipulations.
 package conf
 
 import (
@@ -21,82 +21,179 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/b3log/wide/event"
+	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/util"
-	"github.com/golang/glog"
 )
 
 const (
-	PathSeparator     = string(os.PathSeparator)     // OS-specific path separator
-	PathListSeparator = string(os.PathListSeparator) // OS-specific path list separator
+	// PathSeparator holds the OS-specific path separator.
+	PathSeparator = string(os.PathSeparator)
+	// PathListSeparator holds the OS-specific path list separator.
+	PathListSeparator = string(os.PathListSeparator)
+
+	// WideVersion holds the current wide version.
+	WideVersion = "1.1.0"
+	// CodeMirrorVer holds the current editor version.
+	CodeMirrorVer = "4.10"
 )
-
-const (
-	WideVersion   = "1.0.1" // wide version
-	CodeMirrorVer = "4.8"   // editor version
-)
-
-// The latest session content.
-type LatestSessionContent struct {
-	FileTree    []string // paths of expanding nodes of file tree
-	Files       []string // paths of files of opening editor tabs
-	CurrentFile string   // path of file of the current focused editor tab
-}
-
-// User configuration.
-type User struct {
-	Name                 string
-	Password             string
-	Workspace            string // the GOPATH of this user
-	Locale               string
-	GoFormat             string
-	FontFamily           string
-	FontSize             string
-	Theme                string
-	Editor               *Editor
-	LatestSessionContent *LatestSessionContent
-}
-
-// Editor configuration of a user.
-type Editor struct {
-	FontFamily string
-	FontSize   string
-	LineHeight string
-	Theme      string
-	TabSize    string
-}
 
 // Configuration.
 type conf struct {
-	IP                    string  // server ip, ${ip}
-	Port                  string  // server port
-	Server                string  // server host and port ({IP}:{Port})
-	StaticServer          string  // static resources server scheme, host and port (http://{IP}:{Port})
-	EditorChannel         string  // editor channel (ws://{IP}:{Port})
-	OutputChannel         string  // output channel (ws://{IP}:{Port})
-	ShellChannel          string  // shell channel(ws://{IP}:{Port})
-	SessionChannel        string  // wide session channel (ws://{IP}:{Port})
-	HTTPSessionMaxAge     int     // HTTP session max age (in seciond)
-	StaticResourceVersion string  // version of static resources
-	MaxProcs              int     // Go max procs
-	RuntimeMode           string  // runtime mode (dev/prod)
-	WD                    string  // current working direcitory, ${pwd}
-	Locale                string  // default locale
-	Users                 []*User // configurations of users
+	IP                    string // server ip, ${ip}
+	Port                  string // server port
+	Context               string // server context
+	Server                string // server host and port ({IP}:{Port})
+	StaticServer          string // static resources server scheme, host and port (http://{IP}:{Port})
+	LogLevel              string // logging level: trace/debug/info/warn/error
+	Channel               string // channel (ws://{IP}:{Port})
+	HTTPSessionMaxAge     int    // HTTP session max age (in seciond)
+	StaticResourceVersion string // version of static resources
+	MaxProcs              int    // Go max procs
+	RuntimeMode           string // runtime mode (dev/prod)
+	WD                    string // current working direcitory, ${pwd}
+	Locale                string // default locale
 }
 
-// Configuration variable.
-var Wide conf
+// Logger.
+var logger = log.NewLogger(os.Stdout)
 
-// A raw copy of configuration variable.
-//
-// Save function will use this variable to persist.
-var rawWide conf
+// Wide configurations.
+var Wide *conf
+
+// configurations of users.
+var Users []*User
+
+// Indicates whether runs via Docker.
+var Docker bool
+
+// Load loads the Wide configurations from wide.json and users' configurations from users/{username}.json.
+func Load(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel string, confDocker bool) {
+	initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel, confDocker)
+	initUsers()
+}
+
+func initUsers() {
+	f, err := os.Open("conf/users")
+	if nil != err {
+		logger.Error(err)
+
+		os.Exit(-1)
+	}
+
+	names, err := f.Readdirnames(-1)
+	if nil != err {
+		logger.Error(err)
+
+		os.Exit(-1)
+	}
+	f.Close()
+
+	for _, name := range names {
+		user := &User{}
+
+		bytes, _ := ioutil.ReadFile("conf/users/" + name)
+
+		err := json.Unmarshal(bytes, user)
+		if err != nil {
+			logger.Errorf("Parses [%s] error: %v", name, err)
+
+			os.Exit(-1)
+		}
+
+		Users = append(Users, user)
+	}
+
+	initWorkspaceDirs()
+	initCustomizedConfs()
+}
+
+func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel string, confDocker bool) {
+	bytes, err := ioutil.ReadFile(confPath)
+	if nil != err {
+		logger.Error(err)
+
+		os.Exit(-1)
+	}
+
+	Wide = &conf{}
+
+	err = json.Unmarshal(bytes, Wide)
+	if err != nil {
+		logger.Error("Parses [wide.json] error: ", err)
+
+		os.Exit(-1)
+	}
+
+	// Logging Level
+	log.SetLevel(Wide.LogLevel)
+	if "" != confLogLevel {
+		Wide.LogLevel = confLogLevel
+		log.SetLevel(confLogLevel)
+	}
+
+	logger.Debug("Conf: \n" + string(bytes))
+
+	// Working Driectory
+	Wide.WD = util.OS.Pwd()
+	logger.Debugf("${pwd} [%s]", Wide.WD)
+
+	// IP
+	ip, err := util.Net.LocalIP()
+	if err != nil {
+		logger.Error(err)
+
+		os.Exit(-1)
+	}
+
+	logger.Debugf("${ip} [%s]", ip)
+
+	Docker = confDocker
+
+	if "" != confIP {
+		ip = confIP
+	}
+
+	Wide.IP = strings.Replace(Wide.IP, "${ip}", ip, 1)
+
+	if "" != confPort {
+		Wide.Port = confPort
+	}
+
+	// Server
+	Wide.Server = strings.Replace(Wide.Server, "{IP}", Wide.IP, 1)
+	Wide.Server = strings.Replace(Wide.Server, "{Port}", Wide.Port, 1)
+	if "" != confServer {
+		Wide.Server = confServer
+	}
+
+	// Static Server
+	Wide.StaticServer = strings.Replace(Wide.StaticServer, "{IP}", Wide.IP, 1)
+	Wide.StaticServer = strings.Replace(Wide.StaticServer, "{Port}", Wide.Port, 1)
+	if "" != confStaticServer {
+		Wide.StaticServer = confStaticServer
+	}
+
+	// Context
+	if "" != confContext {
+		Wide.Context = confContext
+	}
+
+	Wide.StaticResourceVersion = strings.Replace(Wide.StaticResourceVersion, "${time}", strconv.FormatInt(time.Now().UnixNano(), 10), 1)
+
+	// Channel
+	Wide.Channel = strings.Replace(Wide.Channel, "{IP}", Wide.IP, 1)
+	Wide.Channel = strings.Replace(Wide.Channel, "{Port}", Wide.Port, 1)
+	if "" != confChannel {
+		Wide.Channel = confChannel
+	}
+}
 
 // FixedTimeCheckEnv checks Wide runtime enviorment periodically (7 minutes).
 //
@@ -116,51 +213,40 @@ func checkEnv() {
 	cmd := exec.Command("go", "version")
 	buf, err := cmd.CombinedOutput()
 	if nil != err {
-		glog.Fatal("Not found 'go' command, please make sure Go has been installed correctly")
+		logger.Error("Not found 'go' command, please make sure Go has been installed correctly")
 
 		os.Exit(-1)
 	}
-	glog.V(5).Info(string(buf))
+	logger.Trace(string(buf))
 
 	if "" == os.Getenv("GOPATH") {
-		glog.Fatal("Not found $GOPATH, please configure it before running Wide")
+		logger.Error("Not found $GOPATH, please configure it before running Wide")
 
 		os.Exit(-1)
 	}
 
 	gocode := util.Go.GetExecutableInGOBIN("gocode")
-	cmd = exec.Command(gocode, "close")
+	cmd = exec.Command(gocode)
 	_, err = cmd.Output()
 	if nil != err {
 		event.EventQueue <- &event.Event{Code: event.EvtCodeGocodeNotFound}
 
-		glog.Warningf("Not found gocode [%s]", gocode)
+		logger.Warnf("Not found gocode [%s]", gocode)
 	}
 
-	ide_stub := util.Go.GetExecutableInGOBIN("ide_stub")
-	cmd = exec.Command(ide_stub, "version")
+	ideStub := util.Go.GetExecutableInGOBIN("ide_stub")
+	cmd = exec.Command(ideStub, "version")
 	_, err = cmd.Output()
 	if nil != err {
 		event.EventQueue <- &event.Event{Code: event.EvtCodeIDEStubNotFound}
 
-		glog.Warningf("Not found ide_stub [%s]", ide_stub)
+		logger.Warnf("Not found ide_stub [%s]", ideStub)
 	}
 }
 
-// FixedTimeSave saves configurations (wide.json) periodically (1 minute).
-//
-// Main goal of this function is to save user session content, for restoring session content while user open Wide next time.
-func FixedTimeSave() {
-	go func() {
-		for _ = range time.Tick(time.Minute) {
-			Save()
-		}
-	}()
-}
-
 // GetUserWorkspace gets workspace path with the specified username, returns "" if not found.
-func (c *conf) GetUserWorkspace(username string) string {
-	for _, user := range c.Users {
+func GetUserWorkspace(username string) string {
+	for _, user := range Users {
 		if user.Name == username {
 			return user.GetWorkspace()
 		}
@@ -170,8 +256,8 @@ func (c *conf) GetUserWorkspace(username string) string {
 }
 
 // GetGoFmt gets the path of Go format tool, returns "gofmt" if not found "goimports".
-func (c *conf) GetGoFmt(username string) string {
-	for _, user := range c.Users {
+func GetGoFmt(username string) string {
+	for _, user := range Users {
 		if user.Name == username {
 			switch user.GoFormat {
 			case "gofmt":
@@ -179,7 +265,7 @@ func (c *conf) GetGoFmt(username string) string {
 			case "goimports":
 				return util.Go.GetExecutableInGOBIN("goimports")
 			default:
-				glog.Errorf("Unsupported Go Format tool [%s]", user.GoFormat)
+				logger.Errorf("Unsupported Go Format tool [%s]", user.GoFormat)
 				return "gofmt"
 			}
 		}
@@ -188,22 +274,9 @@ func (c *conf) GetGoFmt(username string) string {
 	return "gofmt"
 }
 
-// GetWorkspace gets workspace path of the user.
-//
-// Compared to the use of Wide.Workspace, this function will be processed as follows:
-//  1. Replace {WD} variable with the actual directory path
-//  2. Replace ${GOPATH} with enviorment variable GOPATH
-//  3. Replace "/" with "\\" (Windows)
-func (u *User) GetWorkspace() string {
-	w := strings.Replace(u.Workspace, "{WD}", Wide.WD, 1)
-	w = strings.Replace(w, "${GOPATH}", os.Getenv("GOPATH"), 1)
-
-	return filepath.FromSlash(w)
-}
-
 // GetUser gets configuration of the user specified by the given username, returns nil if not found.
-func (*conf) GetUser(username string) *User {
-	for _, user := range Wide.Users {
+func GetUser(username string) *User {
+	for _, user := range Users {
 		if user.Name == username {
 			return user
 		}
@@ -212,137 +285,9 @@ func (*conf) GetUser(username string) *User {
 	return nil
 }
 
-// Save saves Wide configurations.
-func Save() bool {
-	// just the Users field are volatile
-	rawWide.Users = Wide.Users
-
-	// format
-	bytes, err := json.MarshalIndent(rawWide, "", "    ")
-
-	if nil != err {
-		glog.Error(err)
-
-		return false
-	}
-
-	if err = ioutil.WriteFile("conf/wide.json", bytes, 0644); nil != err {
-		glog.Error(err)
-
-		return false
-	}
-
-	return true
-}
-
-// Load loads the configurations from wide.json.
-func Load(confPath, confIP, confPort, confServer, confChannel string, confDocker bool) {
-	bytes, _ := ioutil.ReadFile(confPath)
-
-	err := json.Unmarshal(bytes, &Wide)
-	if err != nil {
-		glog.Error("Parses wide.json error: ", err)
-
-		os.Exit(-1)
-	}
-
-	// keep the raw content
-	json.Unmarshal(bytes, &rawWide)
-
-	// upgrade if need
-	upgrade()
-
-	// Working Driectory
-	Wide.WD = util.OS.Pwd()
-	glog.V(5).Infof("${pwd} [%s]", Wide.WD)
-
-	// IP
-	ip, err := util.Net.LocalIP()
-	if err != nil {
-		glog.Error(err)
-
-		os.Exit(-1)
-	}
-
-	glog.V(5).Infof("${ip} [%s]", ip)
-
-	if confDocker {
-		// TODO: may be we need to do something here
-	}
-
-	if "" != confIP {
-		ip = confIP
-	}
-
-	Wide.IP = strings.Replace(Wide.IP, "${ip}", ip, 1)
-
-	if "" != confPort {
-		Wide.Port = confPort
-	}
-
-	// Server
-	Wide.Server = strings.Replace(Wide.Server, "{IP}", Wide.IP, 1)
-	if "" != confServer {
-		Wide.Server = confServer
-	}
-
-	// Static Server
-	Wide.StaticServer = strings.Replace(Wide.StaticServer, "{IP}", Wide.IP, 1)
-	Wide.StaticResourceVersion = strings.Replace(Wide.StaticResourceVersion, "${time}", strconv.FormatInt(time.Now().UnixNano(), 10), 1)
-
-	// Channels
-	Wide.EditorChannel = strings.Replace(Wide.EditorChannel, "{IP}", Wide.IP, 1)
-	if "" != confChannel {
-		Wide.EditorChannel = confChannel
-	}
-	Wide.OutputChannel = strings.Replace(Wide.OutputChannel, "{IP}", Wide.IP, 1)
-	if "" != confChannel {
-		Wide.OutputChannel = confChannel
-	}
-	Wide.ShellChannel = strings.Replace(Wide.ShellChannel, "{IP}", Wide.IP, 1)
-	if "" != confChannel {
-		Wide.ShellChannel = confChannel
-	}
-	Wide.SessionChannel = strings.Replace(Wide.SessionChannel, "{IP}", Wide.IP, 1)
-	if "" != confChannel {
-		Wide.SessionChannel = confChannel
-	}
-
-	Wide.Server = strings.Replace(Wide.Server, "{Port}", Wide.Port, 1)
-	Wide.StaticServer = strings.Replace(Wide.StaticServer, "{Port}", Wide.Port, 1)
-	Wide.EditorChannel = strings.Replace(Wide.EditorChannel, "{Port}", Wide.Port, 1)
-	Wide.OutputChannel = strings.Replace(Wide.OutputChannel, "{Port}", Wide.Port, 1)
-	Wide.ShellChannel = strings.Replace(Wide.ShellChannel, "{Port}", Wide.Port, 1)
-	Wide.SessionChannel = strings.Replace(Wide.SessionChannel, "{Port}", Wide.Port, 1)
-
-	glog.V(5).Info("Conf: \n" + string(bytes))
-
-	initWorkspaceDirs()
-	initCustomizedConfs()
-}
-
-// upgrade upgrades the wide.json.
-func upgrade() {
-	for _, user := range Wide.Users {
-		if "" == user.Theme {
-			user.Theme = "default" // since 1.1.0
-		}
-
-		if "" == user.Editor.Theme {
-			user.Editor.Theme = "wide" // since 1.1.0
-		}
-
-		if "" == user.Editor.TabSize {
-			user.Editor.TabSize = "4" // since 1.1.0
-		}
-	}
-
-	Save()
-}
-
 // initCustomizedConfs initializes the user customized configurations.
 func initCustomizedConfs() {
-	for _, user := range Wide.Users {
+	for _, user := range Users {
 		UpdateCustomizedConf(user.Name)
 	}
 }
@@ -351,8 +296,8 @@ func initCustomizedConfs() {
 //
 //  1. /static/user/{username}/style.css
 func UpdateCustomizedConf(username string) {
-	var u *User = nil
-	for _, user := range Wide.Users { // maybe it is a beauty of the trade-off of the another world between design and implementation
+	var u *User
+	for _, user := range Users { // maybe it is a beauty of the trade-off of the another world between design and implementation
 		if user.Name == username {
 			u = user
 		}
@@ -366,7 +311,7 @@ func UpdateCustomizedConf(username string) {
 
 	t, err := template.ParseFiles("static/user/style.css.tmpl")
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
 		os.Exit(-1)
 	}
@@ -374,14 +319,14 @@ func UpdateCustomizedConf(username string) {
 	wd := util.OS.Pwd()
 	dir := filepath.Clean(wd + "/static/user/" + u.Name)
 	if err := os.MkdirAll(dir, 0755); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
 		os.Exit(-1)
 	}
 
 	fout, err := os.Create(dir + PathSeparator + "style.css")
 	if nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
 		os.Exit(-1)
 	}
@@ -389,7 +334,7 @@ func UpdateCustomizedConf(username string) {
 	defer fout.Close()
 
 	if err := t.Execute(fout, model); nil != err {
-		glog.Error(err)
+		logger.Error(err)
 
 		os.Exit(-1)
 	}
@@ -401,7 +346,7 @@ func UpdateCustomizedConf(username string) {
 func initWorkspaceDirs() {
 	paths := []string{}
 
-	for _, user := range Wide.Users {
+	for _, user := range Users {
 		paths = append(paths, filepath.SplitList(user.GetWorkspace())...)
 	}
 
@@ -427,12 +372,10 @@ func CreateWorkspaceDir(path string) {
 func createDir(path string) {
 	if !util.File.IsExist(path) {
 		if err := os.MkdirAll(path, 0775); nil != err {
-			glog.Error(err)
+			logger.Error(err)
 
 			os.Exit(-1)
 		}
-
-		glog.V(7).Infof("Created a directory [%s]", path)
 	}
 }
 
@@ -448,6 +391,8 @@ func GetEditorThemes() []string {
 		ret = append(ret, name[:strings.LastIndex(name, ".")])
 	}
 
+	sort.Strings(ret)
+
 	return ret
 }
 
@@ -462,6 +407,8 @@ func GetThemes() []string {
 	for _, name := range names {
 		ret = append(ret, name[:strings.LastIndex(name, ".")])
 	}
+
+	sort.Strings(ret)
 
 	return ret
 }

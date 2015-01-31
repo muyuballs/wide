@@ -1,18 +1,18 @@
-/* 
- * Copyright (c) 2014, B3log
- *  
+/*
+ * Copyright (c) 2014-2015, b3log.org
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
@@ -83,6 +83,13 @@
                                 completion.to || data.to, "complete");
       CodeMirror.signal(data, "pick", completion);
       this.close();
+      
+      // 对自动完成函数（例如 hello()）后光标的位置进行调整，调整到 () 中间
+      var cursor = this.cm.getCursor();
+      var token = this.cm.getTokenAt(cursor);
+      if (token && ")" === token.string) {
+          this.cm.setCursor(CodeMirror.Pos(cursor.line, cursor.ch - 1));
+      }
     },
 
     showHints: function(data) {
