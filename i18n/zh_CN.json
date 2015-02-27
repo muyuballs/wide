@@ -14,7 +14,7 @@
     "debug": "调试",
     "help": "帮助",
     "check_update": "检查更新",
-    "report_issues": "建议",
+    "issues": "问题",
     "wide_doc": "Wide 文档",
     "about": "关于",
     "start_page": "起始页",
@@ -167,5 +167,9 @@
     "start-vet": "START [go vet]",
     "vet-succ": "[go vet] SUCCESS",
     "vet-error": "[go vet] ERROR",
-    "restore_outline": "恢复大纲"
+    "restore_outline": "恢复大纲",
+    "share": "分享",
+    "url": "链接",
+    "short_url": "短链接",
+    "embeded": "嵌入"
 }

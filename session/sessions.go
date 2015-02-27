@@ -60,6 +60,9 @@ var (
 
 	// NotificationWS holds all notification channels. <sid, *util.WSChannel>
 	NotificationWS = map[string]*util.WSChannel{}
+
+	// PlaygroundWS holds all playground channels. <sid, *util.WSChannel>
+	PlaygroundWS = map[string]*util.WSChannel{}
 )
 
 // HTTP session store.
@@ -371,9 +374,14 @@ func (sessions *wSessions) Remove(sid string) {
 				delete(SessionWS, sid)
 			}
 
+			if ws, ok := PlaygroundWS[sid]; ok {
+				ws.Close()
+				delete(PlaygroundWS, sid)
+			}
+
 			cnt := 0 // count wide sessions associated with HTTP session
 			for _, ses := range *sessions {
-				if ses.HTTPSession.Values["id"] == s.HTTPSession.Values["id"] {
+				if ses.Username == s.Username {
 					cnt++
 				}
 			}

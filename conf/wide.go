@@ -42,6 +42,15 @@ const (
 	WideVersion = "1.1.0"
 	// CodeMirrorVer holds the current editor version.
 	CodeMirrorVer = "4.10"
+
+	HelloWorld = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, 世界")
+}
+`
 )
 
 // Configuration.
@@ -59,6 +68,7 @@ type conf struct {
 	RuntimeMode           string // runtime mode (dev/prod)
 	WD                    string // current working direcitory, ${pwd}
 	Locale                string // default locale
+	Playground            string // playground directory
 }
 
 // Logger.
@@ -74,8 +84,12 @@ var Users []*User
 var Docker bool
 
 // Load loads the Wide configurations from wide.json and users' configurations from users/{username}.json.
-func Load(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel string, confDocker bool) {
-	initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel, confDocker)
+func Load(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel,
+	confPlayground string, confDocker bool) {
+	// XXX: ugly args list....
+
+	initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel,
+		confPlayground, confDocker)
 	initUsers()
 }
 
@@ -96,6 +110,10 @@ func initUsers() {
 	f.Close()
 
 	for _, name := range names {
+		if strings.HasPrefix(name, ".") { // hiden files that not be created by Wide
+			continue
+		}
+
 		user := &User{}
 
 		bytes, _ := ioutil.ReadFile("conf/users/" + name)
@@ -114,7 +132,8 @@ func initUsers() {
 	initCustomizedConfs()
 }
 
-func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel string, confDocker bool) {
+func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticServer, confContext, confChannel,
+	confPlayground string, confDocker bool) {
 	bytes, err := ioutil.ReadFile(confPath)
 	if nil != err {
 		logger.Error(err)
@@ -143,6 +162,30 @@ func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticSe
 	// Working Driectory
 	Wide.WD = util.OS.Pwd()
 	logger.Debugf("${pwd} [%s]", Wide.WD)
+
+	// User Home
+	home, err := util.OS.Home()
+	if nil != err {
+		logger.Error("Can't get user's home, please report this issue to developer", err)
+
+		os.Exit(-1)
+	}
+
+	logger.Debugf("${user.home} [%s]", home)
+
+	// Playground Directory
+	Wide.Playground = strings.Replace(Wide.Playground, "${home}", home, 1)
+	if "" != confPlayground {
+		Wide.Playground = confPlayground
+	}
+
+	if !util.File.IsExist(Wide.Playground) {
+		if err := os.Mkdir(Wide.Playground, 0775); nil != err {
+			logger.Errorf("Create Playground [%s] error", err)
+
+			os.Exit(-1)
+		}
+	}
 
 	// IP
 	ip, err := util.Net.LocalIP()
@@ -276,6 +319,11 @@ func GetGoFmt(username string) string {
 
 // GetUser gets configuration of the user specified by the given username, returns nil if not found.
 func GetUser(username string) *User {
+	if "playground" == username { // reserved user for Playground
+		// mock it
+		return NewUser("playground", "", "", "")
+	}
+
 	for _, user := range Users {
 		if user.Name == username {
 			return user
@@ -376,6 +424,8 @@ func createDir(path string) {
 
 			os.Exit(-1)
 		}
+
+		logger.Tracef("Created a dir [%s]", path)
 	}
 }
 

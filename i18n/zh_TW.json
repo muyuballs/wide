@@ -14,7 +14,7 @@
     "debug": "除蟲",
     "help": "說明書",
     "check_update": "程式更新?",
-    "report_issues": "問題回報",
+    "issues": "問題",
     "wide_doc": "Wide 說明文件",
     "about": "關於",
     "start_page": "起始頁",
@@ -167,5 +167,9 @@
     "start-vet": "START [go vet]",
     "vet-succ": "[go vet] SUCCESS",
     "vet-error": "[go vet] ERROR",
-    "restore_outline": "恢復大綱"
+    "restore_outline": "恢復大綱",
+    "share": "分享",
+    "url": "鏈接",
+    "short_url": "短鏈接",
+    "embeded": "嵌入"
 }

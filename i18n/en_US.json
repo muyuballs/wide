@@ -14,7 +14,7 @@
     "debug": "Debug",
     "help": "Help",
     "check_update": "Check Update",
-    "report_issues": "Report Issues",
+    "issues": "Issues",
     "wide_doc": "Wide Document",
     "about": "About",
     "start_page": "Start Page",
@@ -167,5 +167,9 @@
     "start-vet": "START [go vet]",
     "vet-succ": "[go vet] SUCCESS",
     "vet-error": "[go vet] ERROR",
-    "restore_outline": "Restore Outline"
+    "restore_outline": "Restore Outline",
+    "share": "Share",
+    "url": "URL",
+    "short_url": "Short URL",
+    "embeded": "Embeded"
 }
