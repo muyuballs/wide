@@ -1,12 +1,12 @@
-# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg?style=flat)](https://travis-ci.org/b3log/wide) [![Coverage Status](https://img.shields.io/coveralls/b3log/wide.svg?style=flat)](https://coveralls.io/r/b3log/wide) [![Apache License](http://img.shields.io/badge/license-apache2-orange.svg?style=flat)](http://www.apache.org/licenses/LICENSE-2.0) [![API Documentation](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](http://godoc.org/github.com/b3log/wide) [![Download](http://img.shields.io/badge/download-~1K-red.svg?style=flat)](http://pan.baidu.com/s/1dD3XwOT)
+# Wide [![Build Status](https://img.shields.io/travis/b3log/wide.svg?style=flat)](https://travis-ci.org/b3log/wide) [![Coverage Status](https://img.shields.io/coveralls/b3log/wide.svg?style=flat)](https://coveralls.io/r/b3log/wide) [![Apache License](http://img.shields.io/badge/license-apache2-orange.svg?style=flat)](http://www.apache.org/licenses/LICENSE-2.0) [![API Documentation](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](http://godoc.org/github.com/b3log/wide) [![Download](http://img.shields.io/badge/download-~1.5K-red.svg?style=flat)](http://pan.baidu.com/s/1dD3XwOT)
 
 _Have a [**try**](http://wide.b3log.org/signup) first, then [download](http://pan.baidu.com/s/1dD3XwOT) and setup it on your local area network, enjoy yourself!_
 
-先试试我们搭建好的[**在线服务**](http://wide.b3log.org/signup)，好用的话你可以在这里[下载](http://pan.baidu.com/s/1dD3XwOT)并在本地环境运行，然后邀请你的小伙伴们加入吧！
+先试试我们搭建好的[**在线服务**](http://wide.b3log.org/signup)，你可以在这里[下载](http://pan.baidu.com/s/1dD3XwOT)并在本地环境运行，然后邀请小伙伴们加入吧！
 
-## Intro
+## Introduction
 
-A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
+A <b>W</b>eb-based <b>IDE</b> for Teams using Go programming language/Golang.
 
 ![Hello, 世界](https://cloud.githubusercontent.com/assets/873584/4606377/d0ca3c2a-521b-11e4-912c-d955ab05850b.png)
 
@@ -40,10 +40,10 @@ A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
 * [X] Multiplayer: a real team development experience
 * [X] Navigation, Jump to declaration, Find usages, File search etc.
 * [X] Shell: run command on the server
-* [X] Web development: Frontend devlopment (HTML/JS/CSS) all in one
+* [X] Web development: HTML/JS/CSS editor with [Emmet](http://emmet.io) integrated
 * [X] Go tool: go get/install/fmt etc.
 * [X] File Import & Export
-* [X] Themes
+* [X] Themes: editor and UI adjust, respectively
 * [ ] Debug
 * [ ] Git integration: git command on the web
 
@@ -61,8 +61,8 @@ A <b>W</b>eb-based <b>IDE</b> for Teams using Golang.
   ![Show Expression Info](https://cloud.githubusercontent.com/assets/873584/5450618/1d4cd9f4-8543-11e4-950f-121bd3ff4a39.png)
 * **Build Error Info**
   ![Build Error Info](https://cloud.githubusercontent.com/assets/873584/5450632/3e51cccc-8543-11e4-8ca8-8d2427aa16b8.png)
-* **About**
-  ![About](https://cloud.githubusercontent.com/assets/873584/5521709/87ce85a8-89e3-11e4-87b2-4870a426dfcd.png)
+* **Git Clone**  
+  ![Git Clone](https://cloud.githubusercontent.com/assets/873584/6545235/2284f230-c5b7-11e4-985e-7e04367921b1.png)
 
 ## Architecture 
 
@@ -99,8 +99,8 @@ Flow:
 
 ## Documents
 
-* [用户指南](http://88250.gitbooks.io/wide-user-guide)
-* [开发指南](http://88250.gitbooks.io/wide-dev-guide)
+* [用户指南](https://www.gitbook.com/book/88250/wide-user-guide)
+* [开发指南](https://www.gitbook.com/book/88250/wide-dev-guide)
 
 ## Setup
 
@@ -116,7 +116,7 @@ Download [HERE](http://pan.baidu.com/s/1dD3XwOT)!
 
 ### Build Wide for yourself
 
-1. [Download](https://github.com/b3log/wide/archive/master.zip) source or by `git clone`
+1. [Download](https://github.com/b3log/wide/archive/master.zip) source or by `git clone https://github.com/b3log/wide`
 2. Get dependencies with 
    * `go get`
    * `go get github.com/88250/ide_stub`
@@ -148,7 +148,6 @@ Download [HERE](http://pan.baidu.com/s/1dD3XwOT)!
 * [LiteIDE](https://github.com/visualfc/liteide)
 * [gocode](https://github.com/nsf/gocode)
 * [Gorilla](https://github.com/gorilla)
-* [GoBuild](http://gobuild.io)
 * [Docker](https://docker.com)
 
 ----

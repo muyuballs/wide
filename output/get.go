@@ -45,7 +45,6 @@ func GoGetHandler(w http.ResponseWriter, r *http.Request) {
 	locale := conf.GetUser(username).Locale
 
 	var args map[string]interface{}
-
 	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
 		logger.Error(err)
 		data["succ"] = false
@@ -95,7 +94,7 @@ func GoGetHandler(w http.ResponseWriter, r *http.Request) {
 
 		err := wsChannel.WriteJSON(&channelRet)
 		if nil != err {
-			logger.Error(err)
+			logger.Warn(err)
 			return
 		}
 
@@ -131,7 +130,6 @@ func GoGetHandler(w http.ResponseWriter, r *http.Request) {
 			logger.Debugf("User [%s, %s] 's running [go get] [runningId=%d] has done", username, sid, runningId)
 
 			channelRet["output"] = "<span class='get-succ'>" + i18n.Get(locale, "get-succ").(string) + "</span>\n"
-
 		}
 
 		if nil != session.OutputWS[sid] {
@@ -139,7 +137,7 @@ func GoGetHandler(w http.ResponseWriter, r *http.Request) {
 
 			err := wsChannel.WriteJSON(&channelRet)
 			if nil != err {
-				logger.Error(err)
+				logger.Warn(err)
 			}
 
 			wsChannel.Refresh()

@@ -8,6 +8,12 @@
         <meta name="description" content="A Web-based IDE for Teams using Golang, do your development anytime, anywhere."/>
         <meta name="author" content="B3log">
 
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/codemirror.css?{{.conf.StaticResourceVersion}}">       
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/hint/show-hint.css">
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/fold/foldgutter.css">
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/dialog/dialog.css">
+        <link rel="stylesheet" href="{{$.conf.StaticServer}}/static/js/overwrite/codemirror/theme/wide.css?{{.conf.StaticResourceVersion}}">
+
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/dialog.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/base.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/wide.css?{{.conf.StaticResourceVersion}}">
@@ -15,11 +21,7 @@
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/themes/default.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/sign.css?{{.conf.StaticResourceVersion}}">
         <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/side.css?{{.conf.StaticResourceVersion}}">
-        {{if .embed}}<link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/playground-embed.css?{{.conf.StaticResourceVersion}}">{{else}}<link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/playground.css?{{.conf.StaticResourceVersion}}">{{end}}
-
-        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/codemirror.css?{{.conf.StaticResourceVersion}}">       
-        <link rel="stylesheet" href="{{$.conf.StaticServer}}/static/js/overwrite/codemirror/theme/wide.css?{{.conf.StaticResourceVersion}}">
-        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/hint/show-hint.css">
+        <link rel="stylesheet" href="{{.conf.StaticServer}}/static/css/playground{{if .embed}}-embed{{end}}.css?{{.conf.StaticResourceVersion}}">
 
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     </head>
@@ -41,6 +43,9 @@
                     <button class="btn btn-red" id="stop" onclick="playground.stop();">{{.i18n.stop}}</button>
                 </li>
                 <li>
+                    <button class="btn-white btn" id="disqus" onclick="playground.disqus();">Disqus</button>
+                </li>
+                <li>
                     <button class="btn-white btn" id="share" onclick="playground.share();">{{.i18n.share}}</button>
                 </li>
             </ul>
@@ -60,8 +65,8 @@
             </div>
         </div>
         <div class="fn-clear">
-            <div id="editorDiv" class="fn-none">
-                <textarea id='editor'>{{.code}}</textarea>
+            <div id="editorDiv">
+                <textarea rows="20" id='editor' class="fn-none">{{.code}}</textarea>
             </div>
             <textarea id="output" rows="20" readonly="readonly" ></textarea>
         </div>
@@ -70,7 +75,7 @@
         <script type="text/javascript">
                     var disqus_shortname = 'wide-playground';
                     var disqus_identifier = {{.fileName}};
-                    var disqus_url = window.location.protocol + "//" + {{.conf.Server}} + {{.conf.Context}} + "/playground/" + {{.fileName}}
+                    var disqus_url = window.location.protocol + "//" + {{.conf.Server}} + {{.conf.Context}} + "/playground/" + {{.fileName}};
                     (function() {
                     var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
                             dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
@@ -79,8 +84,11 @@
         <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
         {{end}}
         <div class="footer">
-            <div class="wrapper">
-                Ver {{.ver}}, &copy; {{.year}} <a rel="copyright" href="http://b3log.org" target="_blank">B3LOG.ORG</a>
+            <span class="wrapper">
+                Ver {{.ver}}, &copy; {{.year}} <a rel="copyright" href="http://b3log.org" target="_blank">B3LOG.ORG</a>, <a href="https://github.com/b3log/wide/blob/master/TERMS.md" target="_blank">{{.i18n.terms}}</a>
+            </span>
+            <div class="github-btns">
+                <iframe src="https://ghbtns.com/github-btn.html?user=b3log&repo=wide&type=star&count=true" frameborder="0" scrolling="0" width="100" height="20"></iframe>
             </div>
         </div>
 
@@ -94,7 +102,8 @@
                             "channel": "{{.conf.Channel}}",
                             "wideSessionId": "{{.session.ID}}",
                             "label": {{.i18n}},
-                            "embed": {{.embed}}
+                            "embed": {{.embed}},
+                            "disqus": {{.disqus}}
                     };
                     function newWideRequest() {
                     var ret = {

@@ -170,6 +170,28 @@ var tree = {
             window.open(config.context + '/file/zip?path=' + wide.curNode.path + ".zip");
         }
     },
+    decompress: function () {
+        var request = newWideRequest();
+        request.path = wide.curNode.path;
+
+        $.ajax({
+            async: false,
+            type: 'POST',
+            url: config.context + '/file/decompress',
+            data: JSON.stringify(request),
+            dataType: "json",
+            success: function (data) {
+                if (!data.succ) {
+                    $("#dialogAlert").dialog("open", data.msg);
+
+                    return false;
+                }
+
+                var dir = wide.curNode.getParentNode();
+                tree.fileTree.reAsyncChildNodes(dir, "refresh");
+            }
+        });
+    },
     refresh: function (it) {
         if (it) {
             if ($(it).hasClass("disabled")) {
@@ -178,6 +200,15 @@ var tree = {
         }
 
         tree.fileTree.reAsyncChildNodes(wide.curNode, "refresh", true);
+    },
+    gitClone: function (it) {
+        if (it) {
+            if ($(it).hasClass("disabled")) {
+                return false;
+            }
+        }
+
+        $("#dialogGitClonePrompt").dialog('open');
     },
     import: function () {
         var request = newWideRequest();
@@ -234,16 +265,22 @@ var tree = {
                             },
                             onRightClick: function (event, treeId, treeNode) {
                                 if (treeNode && !treeNode.isGOAPI) {
-                                    menu.undisabled(['import', 'export']);
+                                    menu.undisabled(['import', 'export', 'git-clone']);
 
                                     wide.curNode = treeNode;
                                     tree.fileTree.selectNode(treeNode);
 
-                                    if (!tree.isDir()) { // 如果右击了文件
+                                    if (!tree.isDir()) { // if right click on a file
                                         if (wide.curNode.removable) {
                                             $fileRMenu.find(".remove").removeClass("disabled");
                                         } else {
                                             $fileRMenu.find(".remove").addClass("disabled");
+                                        }
+
+                                        if (wide.curNode.path.indexOf("zip", wide.curNode.path.length - "zip".length) === -1) { // !path.endsWith("zip")
+                                            $fileRMenu.find(".decompress").hide();
+                                        } else {
+                                            $fileRMenu.find(".decompress").show();
                                         }
 
                                         var top = event.clientY - 10;
@@ -256,7 +293,9 @@ var tree = {
                                             "display": "block"
                                         }).show();
 
-                                        menu.disabled(['import']);
+                                        $dirRMenu.hide();
+
+                                        menu.disabled(['import', 'git-clone']);
                                     } else { // 右击了目录
                                         if (wide.curNode.removable) {
                                             $dirRMenu.find(".remove").removeClass("disabled");
@@ -280,6 +319,8 @@ var tree = {
                                             "left": event.clientX + "px",
                                             "display": "block"
                                         }).show();
+
+                                        $fileRMenu.hide();
                                     }
                                     $("#files").focus();
                                 }
@@ -289,9 +330,9 @@ var tree = {
                                     wide.curNode = treeNode;
                                     tree.fileTree.selectNode(treeNode);
 
-                                    menu.undisabled(['import', 'export']);
-                                    if (!tree.isDir()) { // 如果右击了文件
-                                        menu.disabled(['import']);
+                                    menu.undisabled(['import', 'export', 'git-clone']);
+                                    if (!tree.isDir()) {
+                                        menu.disabled(['import', 'git-clone']);
                                     }
 
                                     $("#files").focus();
@@ -335,7 +376,7 @@ var tree = {
             }
         }
 
-        if (!tree.isDir()) { // 如果单击了文件
+        if (!tree.isDir()) {
             var request = newWideRequest();
             request.path = treeNode.path;
 
@@ -350,6 +391,15 @@ var tree = {
                         $("#dialogAlert").dialog("open", data.msg);
 
                         return false;
+                    }
+
+                    if (!data.mode) {
+                        var mode = CodeMirror.findModeByFileName(treeNode.path);
+                        data.mode = mode.mime;
+                    }
+                    
+                    if (!data.mode) {
+                        console.error("Can't find mode by file name [" + treeNode.path + "]");
                     }
 
                     if ("img" === data.mode) { // 是图片文件的话新建 tab 打开
@@ -469,20 +519,27 @@ var tree = {
                         $("#dialogRenamePrompt").dialog("close");
 
                         // update tree node
-                        var suffixIndex = name.lastIndexOf('.'),
-                                iconSkin = wide.getClassBySuffix(name.substr(suffixIndex + 1));
+                        var suffixIndex = name.lastIndexOf('.');
+                        var suffix = name.substr(suffixIndex + 1);
+
+                        var iconSkin = 'ico-ztree-dir ';
+                        if ('f' === wide.curNode.type) {
+                            iconSkin = wide.getClassBySuffix(suffix);
+                        }
+
                         wide.curNode.name = name;
                         wide.curNode.title = request.newPath;
                         wide.curNode.path = request.newPath;
                         wide.curNode.iconSkin = iconSkin;
+
                         tree.fileTree.updateNode(wide.curNode);
 
                         // update open editor tab name
                         for (var i = 0, ii = editors.data.length; i < ii; i++) {
                             if (wide.curNode.tId === editors.data[i].id) {
-                                var info = CodeMirror.findModeByExtension(name.substr(suffixIndex + 1));
-                                if (info) {
-                                    editors.data[i].editor.setOption("mode", info.mime);
+                                var mode = CodeMirror.findModeByExtension(suffix);
+                                if (mode) {
+                                    editors.data[i].editor.setOption("mode", mode.mime);
                                 }
 
                                 var $currentSpan = $(".edit-panel .tabs > div[data-index=" + wide.curNode.tId + "] > span:eq(0)");

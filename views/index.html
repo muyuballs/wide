@@ -318,6 +318,11 @@
                                 <span class="ico-signup font-ico"></span>
                                 <span>{{.i18n.sign_up}}</span>
                             </li>
+                            <li class="hr"></li>
+                            <li class="git-clone disabled" onclick="if (!$(this).hasClass('disabled')){tree.gitClone(this)}">
+                                <span class="ico-git font-ico"></span>
+                                <span>{{.i18n.git_clone}}</span>
+                            </li>
                         </ul>
                     </div>
                 </li>
@@ -328,7 +333,7 @@
                     <span>{{.i18n.help}}</span>
                     <div class="frame">
                         <ul>
-                            <li onclick="window.open('https://www.gitbook.io/book/88250/wide-user-guide')">
+                            <li onclick="window.open('https://www.gitbook.com/book/88250/wide-user-guide')">
                                 <span class="font-ico ico-book"></span>
                                 <span>{{.i18n.wide_doc}}</span>
                             </li>                            
@@ -354,6 +359,10 @@
                             <li onclick="editors.openStartPage()">
                                 <span class="font-ico ico-start"></span>
                                 <span>{{.i18n.start_page}}</span>
+                            </li>
+                            <li onclick="window.open('http://pan.baidu.com/s/1dD3XwOT')">
+                                <span class="space"></span>
+                                <span>{{.i18n.download}}</span>
                             </li>
                             <li onclick="menu.openAbout()">
                                 <span class="font-ico ico-about"></span>
@@ -421,6 +430,11 @@
                                 <li onclick="tree.refresh(this);">
                                     <span class="ico-refresh font-ico"></span> {{.i18n.refresh}}
                                 </li>
+                                <li class="hr"></li>
+                                <li onclick="tree.gitClone(this);">
+                                    <span class="ico-git font-ico"></span> {{.i18n.git_clone}}
+                                </li>
+                                <li class="hr"></li>
                                 <li onclick="$('#importFileupload').click();">
                                     <span class="ico-import font-ico"></span> {{.i18n.import}}
                                 </li>
@@ -443,8 +457,11 @@
                                     <span class="space"></span> {{.i18n.rename}}
                                 </li>
                                 <li class="hr"></li>
-                                <li class="" onclick="tree.export(this);">
+                                <li class="export" onclick="tree.export(this);">
                                     <span class="ico-export font-ico"></span> {{.i18n.export}}
+                                </li>
+                                <li class="decompress" onclick="tree.decompress(this);">
+                                    <span class="space"></span> {{.i18n.decompress}}
                                 </li>
                             </ul>
                         </div>
@@ -562,6 +579,9 @@
         <div id="dialogGoLinePrompt" class="dialog-prompt fn-none">
             <input/>
         </div>
+        <div id="dialogGitClonePrompt" class="dialog-prompt fn-none">
+            <input placeholder="https://github.com/b3log/wide.git"/>
+        </div>
         <div id="dialogGoFilePrompt" class="dialog-prompt fn-none">
             <input/>
             <ul class="list" tabindex="-1"></ul>
@@ -629,6 +649,7 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/addon/comment/comment.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/meta.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/go/go.js"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/clike/clike.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/xml/xml.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/htmlmixed/htmlmixed.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/javascript/javascript.js"></script>
@@ -638,6 +659,8 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/sql/sql.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/lint/json-lint.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/lint/go-lint.js?{{.conf.StaticResourceVersion}}"></script>
+        
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/emmet.js?{{.conf.StaticResourceVersion}}"></script>            
 
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/js-beautify-1.5.4/beautify.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/js-beautify-1.5.4/beautify-html.js?{{.conf.StaticResourceVersion}}"></script>

@@ -98,7 +98,7 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 
 			err := wsChannel.WriteJSON(&channelRet)
 			if nil != err {
-				logger.Error(err)
+				logger.Warn(err)
 				return
 			}
 
@@ -125,7 +125,7 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 			channelRet["output"] = ""
 			err := wsChannel.WriteJSON(&channelRet)
 			if nil != err {
-				logger.Error(err)
+				logger.Warn(err)
 				return
 			}
 
@@ -133,6 +133,8 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		go func() {
+			defer util.Recover()
+
 			buf := outputBuf{}
 
 			for {
@@ -143,23 +145,17 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 
 				r, _, err := outReader.ReadRune()
 
-				oneRuneStr := string(r)
-				oneRuneStr = strings.Replace(oneRuneStr, "<", "&lt;", -1)
-				oneRuneStr = strings.Replace(oneRuneStr, ">", "&gt;", -1)
-
-				buf.content += oneRuneStr
-
 				if nil != err {
-					// remove the exited process from user process set
+					// remove the exited process from user's process set
 					Processes.Remove(wSession, cmd.Process)
 
-					logger.Tracef("User [%s, %s] 's running [id=%d, file=%s] has done [stdout %v], ", wSession.Username, sid, runningId, filePath, err)
+					logger.Debugf("User [%s, %s] 's running [id=%d, file=%s] has done [stdout %v], ", wSession.Username, sid, runningId, filePath, err)
 
 					channelRet["cmd"] = "run-done"
 					channelRet["output"] = buf.content
 					err := wsChannel.WriteJSON(&channelRet)
 					if nil != err {
-						logger.Error(err)
+						logger.Warn(err)
 						break
 					}
 
@@ -167,6 +163,12 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 
 					break
 				}
+
+				oneRuneStr := string(r)
+				oneRuneStr = strings.Replace(oneRuneStr, "<", "&lt;", -1)
+				oneRuneStr = strings.Replace(oneRuneStr, ">", "&gt;", -1)
+
+				buf.content += oneRuneStr
 
 				now := time.Now().UnixNano() / int64(time.Millisecond)
 
@@ -182,7 +184,7 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 
 					err = wsChannel.WriteJSON(&channelRet)
 					if nil != err {
-						logger.Error(err)
+						logger.Warn(err)
 						break
 					}
 
@@ -220,7 +222,7 @@ func RunHandler(w http.ResponseWriter, r *http.Request) {
 
 				err = wsChannel.WriteJSON(&channelRet)
 				if nil != err {
-					logger.Error(err)
+					logger.Warn(err)
 					break
 				}
 

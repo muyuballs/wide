@@ -192,10 +192,18 @@ var editors = {
                         'find', 'find-next', 'find-previous', 'replace', 'replace-all',
                         'format', 'autocomplete', 'jump-to-decl', 'expr-info', 'find-usages', 'toggle-comment',
                         'edit']);
+
+                    // remove selected tree node
+                    tree.fileTree.cancelSelectedNode();
+                    wide.curNode = undefined;
+                    wide.curEditor = undefined;
+                    wide.refreshOutline();
+                    $(".footer .cursor").text('');
+                    return false;
                 }
 
                 if (!nextId) {
-                    // 不存在打开的编辑器
+                    // 编辑器区域不存在打开的 Tab
                     // remove selected tree node
                     tree.fileTree.cancelSelectedNode();
                     wide.curNode = undefined;
@@ -244,7 +252,7 @@ var editors = {
         wide.curEditor = undefined;
         wide.refreshOutline();
         $(".footer .cursor").text('');
-        
+
         var dateFormat = function (time, fmt) {
             var date = new Date(time);
             var dateObj = {
@@ -275,7 +283,7 @@ var editors = {
                 $("#startPage").height($('.side-right').height() - $(".bottom-window-group").children(".tabs").height() - 100);
                 $("#startPage").load(config.context + '/start?sid=' + config.wideSessionId);
                 $.ajax({
-                    url: "https://symphony.b3log.org/apis/articles?tags=wide,golang&p=1&size=30",
+                    url: "https://symphony.b3log.org/apis/articles?tags=wide,golang&p=1&size=20",
                     type: "GET",
                     dataType: "jsonp",
                     jsonp: "callback",
@@ -285,10 +293,10 @@ var editors = {
                             return;
                         }
 
-                        // 按 size = 30 取，但只保留最多 10 篇
+                        // 按 size = 20 取，但只保留最多 9 篇
                         var length = articles.length;
-                        if (length > 10) {
-                            length = 10;
+                        if (length > 9) {
+                            length = 9;
                         }
 
                         var listHTML = "<ul><li class='title'>" + config.label.community + "</li>";
@@ -298,7 +306,7 @@ var editors = {
                                     + "<a target='_blank' href='http://symphony.b3log.org"
                                     + article.articlePermalink + "'>"
                                     + article.articleTitle + "</a>&nbsp; <span class='date'>"
-                                    + dateFormat(article.articleCreateTime, 'yyyy-MM-dd hh:mm');
+                                    + dateFormat(article.articleCreateTime, 'yyyy-MM-dd');
                             +"</span></li>";
                         }
 
@@ -411,7 +419,7 @@ var editors = {
             if (mode && "go" !== mode.name) {
                 return CodeMirror.Pass;
             }
-            
+
             var token = cm.getTokenAt(cm.getCursor());
 
             if ("comment" === token.type || "string" === token.type) {
@@ -766,6 +774,7 @@ var editors = {
             foldGutter: true,
             cursorHeight: 1,
             path: data.path,
+            profile: 'xhtml', // define Emmet output profile
             extraKeys: {
                 "Ctrl-\\": "autocompleteAnyWord",
                 ".": "autocompleteAfterDot",
@@ -803,6 +812,10 @@ var editors = {
                 "Shift-Alt-J": "selectIdentifier"
             }
         });
+
+        if ("text/html" === data.mode) {
+            emmetCodeMirror(editor);
+        }
 
         editor.on('cursorActivity', function (cm) {
             $(".edit-exprinfo").remove();

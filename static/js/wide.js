@@ -181,6 +181,8 @@ var wide = {
                             return false;
                         }
 
+                        var mode = CodeMirror.findModeByFileName(name);
+
                         $("#dialogNewFilePrompt").dialog("close");
                         var iconSkin = wide.getClassBySuffix(name.split(".")[1]);
 
@@ -188,7 +190,7 @@ var wide = {
                                 "name": name,
                                 "iconSkin": iconSkin,
                                 "path": request.path,
-                                "mode": data.mode,
+                                "mode": mode,
                                 "removable": true,
                                 "creatable": true
                             }]);
@@ -236,7 +238,8 @@ var wide = {
                                 "iconSkin": "ico-ztree-dir ",
                                 "path": request.path,
                                 "removable": true,
-                                "creatable": true
+                                "creatable": true,
+                                "isParent": true
                             }]);
                     }
                 });
@@ -359,6 +362,36 @@ var wide = {
                 editor.focus();
             }
         });
+
+        $("#dialogGitClonePrompt").dialog({
+            "modal": true,
+            "height": 52,
+            "width": 360,
+            "title": config.label.git_clone,
+            "okText": config.label.confirm,
+            "cancelText": config.label.cancel,
+            "afterOpen": function () {
+                $("#dialogGitClonePrompt > input").val('').focus();
+                $("#dialogGitClonePrompt").closest(".dialog-main").find(".dialog-footer > button:eq(0)").prop("disabled", true);
+            },
+            "ok": function () {
+                $("#dialogGitClonePrompt").dialog("close");
+
+                var request = newWideRequest();
+                request.path = wide.curNode.path;
+                request.repository = $("#dialogGitClonePrompt > input").val();
+
+                $.ajax({
+                    type: 'POST',
+                    url: config.context + '/git/clone',
+                    data: JSON.stringify(request),
+                    dataType: "json",
+                    success: function (data) {
+
+                    }
+                });
+            }
+        });
     },
     _initLayout: function () {
         var mainH = $(window).height() - $(".menu").height() - $(".footer").height() - 2,
@@ -433,6 +466,7 @@ var wide = {
                 case 'start-vet':
                 case 'start-install':
                 case 'start-get':
+                case 'start-git_clone':
                     bottomGroup.fillOutput(data.output);
 
                     break;
@@ -441,6 +475,11 @@ var wide = {
                 case 'go install':
                 case 'go get':
                     bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + data.output);
+
+                    break;
+                case 'git clone':
+                    bottomGroup.fillOutput($('.bottom-window-group .output > div').html() + data.output);
+                    tree.fileTree.reAsyncChildNodes(wide.curNode, "refresh", false);
 
                     break;
                 case 'build':
@@ -495,7 +534,7 @@ var wide = {
             if (event.which === 3) {
                 return false;
             }
-            
+
             $(".frame").hide();
 
             if (!($(event.target).closest(".frame").length === 1 || event.target.className === "frame")) {

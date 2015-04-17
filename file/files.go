@@ -38,7 +38,8 @@ var logger = log.NewLogger(os.Stdout)
 type Node struct {
 	Name      string  `json:"name"`
 	Path      string  `json:"path"`
-	IconSkin  string  `json:"iconSkin"`  // Value should be end with a space
+	IconSkin  string  `json:"iconSkin"` // Value should be end with a space
+	IsParent  bool    `json:"isParent"`
 	Type      string  `json:"type"`      // "f": file, "d": directory
 	Creatable bool    `json:"creatable"` // whether can create file in this file node
 	Removable bool    `json:"removable"` // whether can remove this file node
@@ -67,11 +68,11 @@ func initAPINode() {
 	walk(apiPath, apiNode, false, false, true)
 }
 
-// GetFiles handles request of constructing user workspace file tree.
+// GetFilesHandler handles request of constructing user workspace file tree.
 //
 // The Go API source code package also as a child node,
 // so that users can easily view the Go API source code in file tree.
-func GetFiles(w http.ResponseWriter, r *http.Request) {
+func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetGzJSON(w, r, data)
 
@@ -86,7 +87,7 @@ func GetFiles(w http.ResponseWriter, r *http.Request) {
 	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
 
-	root := Node{Name: "root", Path: "", IconSkin: "ico-ztree-dir ", Type: "d", Children: []*Node{}}
+	root := Node{Name: "root", Path: "", IconSkin: "ico-ztree-dir ", Type: "d", IsParent: true, Children: []*Node{}}
 
 	if nil == apiNode { // lazy init
 		initAPINode()
@@ -112,8 +113,8 @@ func GetFiles(w http.ResponseWriter, r *http.Request) {
 	data["root"] = root
 }
 
-// RefreshDirectory handles request of refresh a directory of file tree.
-func RefreshDirectory(w http.ResponseWriter, r *http.Request) {
+// RefreshDirectoryHandler handles request of refresh a directory of file tree.
+func RefreshDirectoryHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	path := r.FormValue("path")
 
@@ -131,8 +132,8 @@ func RefreshDirectory(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-// GetFile handles request of opening file by editor.
-func GetFile(w http.ResponseWriter, r *http.Request) {
+// GetFileHandler handles request of opening file by editor.
+func GetFileHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -186,13 +187,12 @@ func GetFile(w http.ResponseWriter, r *http.Request) {
 		data["msg"] = "Can't open a binary file :("
 	} else {
 		data["content"] = content
-		data["mode"] = getEditorMode(extension)
 		data["path"] = path
 	}
 }
 
-// SaveFile handles request of saving file.
-func SaveFile(w http.ResponseWriter, r *http.Request) {
+// SaveFileHandler handles request of saving file.
+func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -233,8 +233,8 @@ func SaveFile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// NewFile handles request of creating file or directory.
-func NewFile(w http.ResponseWriter, r *http.Request) {
+// NewFileHandler handles request of creating file or directory.
+func NewFileHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -263,13 +263,15 @@ func NewFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if "f" == fileType {
-		extension := filepath.Ext(path)
-		data["mode"] = getEditorMode(extension)
+		logger.Debugf("Created a file [%s] by user [%s]", path, wSession.Username)
+	} else {
+		logger.Debugf("Created a dir [%s] by user [%s]", path, wSession.Username)
 	}
+
 }
 
-// RemoveFile handles request of removing file or directory.
-func RemoveFile(w http.ResponseWriter, r *http.Request) {
+// RemoveFileHandler handles request of removing file or directory.
+func RemoveFileHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -292,11 +294,15 @@ func RemoveFile(w http.ResponseWriter, r *http.Request) {
 
 		wSession.EventQueue.Queue <- &event.Event{Code: event.EvtCodeServerInternalError, Sid: sid,
 			Data: "can't remove file " + path}
+
+		return
 	}
+
+	logger.Debugf("Removed a file [%s] by user [%s]", path, wSession.Username)
 }
 
-// RenameFile handles request of renaming file or directory.
-func RenameFile(w http.ResponseWriter, r *http.Request) {
+// RenameFileHandler handles request of renaming file or directory.
+func RenameFileHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -320,7 +326,11 @@ func RenameFile(w http.ResponseWriter, r *http.Request) {
 
 		wSession.EventQueue.Queue <- &event.Event{Code: event.EvtCodeServerInternalError, Sid: sid,
 			Data: "can't rename file " + oldPath}
+
+		return
 	}
+
+	logger.Debugf("Renamed a file [%s] to [%s] by user [%s]", oldPath, newPath, wSession.Username)
 }
 
 // Use to find results sorting.
@@ -335,8 +345,8 @@ func (f foundPaths) Len() int           { return len(f) }
 func (f foundPaths) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f foundPaths) Less(i, j int) bool { return f[i].score > f[j].score }
 
-// Find handles request of find files under the specified directory with the specified filename pattern.
-func Find(w http.ResponseWriter, r *http.Request) {
+// FindHandler handles request of find files under the specified directory with the specified filename pattern.
+func FindHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -383,8 +393,8 @@ func Find(w http.ResponseWriter, r *http.Request) {
 	data["founds"] = founds
 }
 
-// SearchText handles request of searching files under the specified directory with the specified keyword.
-func SearchText(w http.ResponseWriter, r *http.Request) {
+// SearchTextHandler handles request of searching files under the specified directory with the specified keyword.
+func SearchTextHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -449,6 +459,7 @@ func walk(path string, node *Node, creatable, removable, isGOAPI bool) {
 			child.Type = "d"
 			child.Creatable = creatable
 			child.IconSkin = "ico-ztree-dir "
+			child.IsParent = true
 
 			walk(fpath, &child, creatable, removable, isGOAPI)
 		} else {
@@ -457,7 +468,6 @@ func walk(path string, node *Node, creatable, removable, isGOAPI bool) {
 			ext := filepath.Ext(fpath)
 
 			child.IconSkin = getIconSkin(ext)
-			child.Mode = getEditorMode(ext)
 		}
 	}
 
@@ -534,34 +544,6 @@ func getIconSkin(filenameExtension string) string {
 	}
 }
 
-// getEditorMode gets editor mode with the specified filename extension.
-//
-// Refers to the CodeMirror document for modes.
-func getEditorMode(filenameExtension string) string {
-	switch filenameExtension {
-	case ".go":
-		return "text/x-go"
-	case ".html":
-		return "text/html"
-	case ".md":
-		return "text/x-markdown"
-	case ".js":
-		return "text/javascript"
-	case ".json":
-		return "application/json"
-	case ".css":
-		return "text/css"
-	case ".xml":
-		return "application/xml"
-	case ".sh":
-		return "text/x-sh"
-	case ".sql":
-		return "text/x-sql"
-	default:
-		return "text/plain"
-	}
-}
-
 // createFile creates file on the specified path.
 //
 // fileType:
@@ -580,7 +562,7 @@ func createFile(path, fileType string) bool {
 
 		defer file.Close()
 
-		logger.Debugf("Created file [%s]", path)
+		logger.Tracef("Created file [%s]", path)
 
 		return true
 	case "d":
@@ -592,7 +574,7 @@ func createFile(path, fileType string) bool {
 			return false
 		}
 
-		logger.Debugf("Created directory [%s]", path)
+		logger.Tracef("Created directory [%s]", path)
 
 		return true
 	default:
@@ -610,7 +592,7 @@ func removeFile(path string) bool {
 		return false
 	}
 
-	logger.Debugf("Removed [%s]", path)
+	logger.Tracef("Removed [%s]", path)
 
 	return true
 }
@@ -623,7 +605,7 @@ func renameFile(oldPath, newPath string) bool {
 		return false
 	}
 
-	logger.Debugf("Renamed [%s] to [%s]", oldPath, newPath)
+	logger.Tracef("Renamed [%s] to [%s]", oldPath, newPath)
 
 	return true
 }

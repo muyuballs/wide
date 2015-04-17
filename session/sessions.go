@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
@@ -36,6 +37,7 @@ import (
 	"github.com/b3log/wide/event"
 	"github.com/b3log/wide/log"
 	"github.com/b3log/wide/util"
+	"github.com/go-fsnotify/fsnotify"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 )
@@ -77,6 +79,7 @@ type WideSession struct {
 	EventQueue  *event.UserEventQueue      // event queue
 	State       int                        // state
 	Content     *conf.LatestSessionContent // the latest session content
+	FileWatcher *fsnotify.Watcher          // files change watcher
 	Created     time.Time                  // create time
 	Updated     time.Time                  // the latest use time
 }
@@ -98,6 +101,8 @@ var mutex sync.Mutex
 // Invalid sessions: sessions that not used within 30 minutes, refers to WideSession.Updated field.
 func FixedTimeRelease() {
 	go func() {
+		defer util.Recover()
+
 		for _ = range time.Tick(time.Hour) {
 			hour, _ := time.ParseDuration("-30m")
 			threshold := time.Now().Add(hour)
@@ -130,6 +135,8 @@ func (u *userReport) report() string {
 // FixedTimeReport reports the Wide sessions status periodically (10 minutes).
 func FixedTimeReport() {
 	go func() {
+		defer util.Recover()
+
 		for _ = range time.Tick(10 * time.Minute) {
 			users := userReports{}
 			processSum := 0
@@ -238,8 +245,8 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SaveContent handles request of session content string.
-func SaveContent(w http.ResponseWriter, r *http.Request) {
+// SaveContentHandler handles request of session content string.
+func SaveContentHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -295,16 +302,14 @@ func (sessions *wSessions) New(httpSession *sessions.Session, sid string) *WideS
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	username := httpSession.Values["username"].(string)
 	now := time.Now()
-
-	// create user event queue
-	userEventQueue := event.UserEventQueues.New(sid)
 
 	ret := &WideSession{
 		ID:          sid,
-		Username:    httpSession.Values["username"].(string),
+		Username:    username,
 		HTTPSession: httpSession,
-		EventQueue:  userEventQueue,
+		EventQueue:  nil,
 		State:       sessionStateActive,
 		Content:     &conf.LatestSessionContent{},
 		Created:     now,
@@ -312,6 +317,91 @@ func (sessions *wSessions) New(httpSession *sessions.Session, sid string) *WideS
 	}
 
 	*sessions = append(*sessions, ret)
+
+	if "playground" == username {
+		return ret
+	}
+
+	// create user event queue
+	ret.EventQueue = event.UserEventQueues.New(sid)
+
+	// add a filesystem watcher to notify front-end after the files changed
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logger.Error(err)
+
+		return ret
+	}
+
+	go func() {
+		defer util.Recover()
+
+		workspaces := filepath.SplitList(conf.GetUserWorkspace(username))
+		for _, workspace := range workspaces {
+			filepath.Walk(filepath.Join(workspace, "src"), func(dirPath string, f os.FileInfo, err error) error {
+				if ".git" == f.Name() { // XXX: discard other unconcered dirs
+					return filepath.SkipDir
+				}
+
+				if f.IsDir() {
+					if err = watcher.Add(dirPath); nil != err {
+						logger.Error(err, dirPath)
+					}
+
+					logger.Tracef("Added a file watcher [%s]", dirPath)
+				}
+
+				return nil
+			})
+
+		}
+
+		ret.FileWatcher = watcher
+	}()
+
+	go func() {
+		defer util.Recover()
+
+		for {
+			ch := SessionWS[sid]
+			if nil == ch {
+				return // release this gorutine
+			}
+
+			select {
+			case event := <-watcher.Events:
+				path := event.Name
+				dir := filepath.Dir(path)
+
+				ch = SessionWS[sid]
+				if nil == ch {
+					return // release this gorutine
+				}
+
+				if event.Op&fsnotify.Create == fsnotify.Create {
+					if err = watcher.Add(path); nil != err {
+						logger.Warn(err, path)
+					}
+
+					logger.Tracef("Added a file watcher [%s]", path)
+
+					cmd := map[string]interface{}{"path": path, "dir": dir, "cmd": "create-file"}
+					ch.WriteJSON(&cmd)
+				} else if event.Op&fsnotify.Remove == fsnotify.Remove {
+					cmd := map[string]interface{}{"path": path, "dir": dir, "cmd": "remove-file"}
+					ch.WriteJSON(&cmd)
+
+				} else if event.Op&fsnotify.Rename == fsnotify.Rename {
+					cmd := map[string]interface{}{"path": path, "dir": dir, "cmd": "rename-file"}
+					ch.WriteJSON(&cmd)
+				}
+			case err := <-watcher.Errors:
+				if nil != err {
+					logger.Error("File watcher ERROR: ", err)
+				}
+			}
+		}
+	}()
 
 	return ret
 }
@@ -337,6 +427,7 @@ func (sessions *wSessions) Get(sid string) *WideSession {
 //  1. user event queue
 //  2. process set
 //  3. websocket channels
+//  4. file watcher
 func (sessions *wSessions) Remove(sid string) {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -377,6 +468,11 @@ func (sessions *wSessions) Remove(sid string) {
 			if ws, ok := PlaygroundWS[sid]; ok {
 				ws.Close()
 				delete(PlaygroundWS, sid)
+			}
+
+			// file watcher
+			if nil != s.FileWatcher {
+				s.FileWatcher.Close()
 			}
 
 			cnt := 0 // count wide sessions associated with HTTP session

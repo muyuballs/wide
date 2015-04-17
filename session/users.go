@@ -37,10 +37,11 @@ import (
 const (
 	// TODO: i18n
 
-	userExists      = "user exists"
-	emailExists     = "email exists"
-	userCreated     = "user created"
-	userCreateError = "user create error"
+	userExists       = "user exists"
+	emailExists      = "email exists"
+	userCreated      = "user created"
+	userCreateError  = "user create error"
+	notAllowRegister = "not allow register"
 )
 
 // Exclusive lock for adding user.
@@ -179,12 +180,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Password string
 	}{}
 
-	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-		logger.Error("login error: ", err)
-		succ = false
-
-		return
-	}
+	args.Username = r.FormValue("username")
+	args.Password = r.FormValue("password")
 
 	succ = false
 	for _, user := range conf.Users {
@@ -223,8 +220,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	httpSession.Save(r, w)
 }
 
-// SignUpUser handles request of registering user.
-func SignUpUser(w http.ResponseWriter, r *http.Request) {
+// SignUpUserHandler handles request of registering user.
+func SignUpUserHandler(w http.ResponseWriter, r *http.Request) {
 	if "GET" == r.Method {
 		// show the user sign up page
 
@@ -292,6 +289,8 @@ func SignUpUser(w http.ResponseWriter, r *http.Request) {
 // Main goal of this function is to save user session content, for restoring session content while user open Wide next time.
 func FixedTimeSave() {
 	go func() {
+		defer util.Recover()
+
 		for _ = range time.Tick(time.Minute) {
 			users := getOnlineUsers()
 
@@ -334,12 +333,16 @@ func getOnlineUsers() []*conf.User {
 // addUser add a user with the specified username, password and email.
 //
 //  1. create the user's workspace
-//  2. generate 'Hello, 世界' demo code in the workspace (a console version and a http version)
+//  2. generate 'Hello, 世界' demo code in the workspace (a console version and a HTTP version)
 //  3. update the user customized configurations, such as style.css
 //  4. serve files of the user's workspace via HTTP
 //
 // Note: user [playground] is a reserved mock user
 func addUser(username, password, email string) string {
+	if !conf.Wide.AllowRegister {
+		return notAllowRegister
+	}
+
 	if "playground" == username {
 		return userExists
 	}

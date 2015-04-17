@@ -160,6 +160,8 @@ func BuildHandler(w http.ResponseWriter, r *http.Request) {
 			channelRet["output"] = "<span class='build-succ'>" + i18n.Get(locale, "build-succ").(string) + "</span>\n"
 
 			go func() { // go install, for subsequent gocode lib-path
+				defer util.Recover()
+
 				cmd := exec.Command("go", "install")
 				cmd.Dir = curDir
 
@@ -243,7 +245,7 @@ func BuildHandler(w http.ResponseWriter, r *http.Request) {
 			wsChannel := session.OutputWS[sid]
 			err := wsChannel.WriteJSON(&channelRet)
 			if nil != err {
-				logger.Error(err)
+				logger.Warn(err)
 			}
 
 			wsChannel.Refresh()

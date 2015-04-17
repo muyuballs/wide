@@ -41,7 +41,7 @@ const (
 	// WideVersion holds the current wide version.
 	WideVersion = "1.2.0"
 	// CodeMirrorVer holds the current editor version.
-	CodeMirrorVer = "4.10"
+	CodeMirrorVer = "5.1"
 
 	HelloWorld = `package main
 
@@ -69,6 +69,7 @@ type conf struct {
 	WD                    string // current working direcitory, ${pwd}
 	Locale                string // default locale
 	Playground            string // playground directory
+	AllowRegister         bool   // allow register or not
 }
 
 // Logger.
@@ -253,6 +254,8 @@ func FixedTimeCheckEnv() {
 }
 
 func checkEnv() {
+	defer util.Recover()
+
 	cmd := exec.Command("go", "version")
 	buf, err := cmd.CombinedOutput()
 	if nil != err {
@@ -274,7 +277,7 @@ func checkEnv() {
 	if nil != err {
 		event.EventQueue <- &event.Event{Code: event.EvtCodeGocodeNotFound}
 
-		logger.Warnf("Not found gocode [%s]", gocode)
+		logger.Warnf("Not found gocode [%s], please install it with this command: go get github.com/nsf/gocode", gocode)
 	}
 
 	ideStub := util.Go.GetExecutableInGOBIN("ide_stub")
@@ -283,7 +286,7 @@ func checkEnv() {
 	if nil != err {
 		event.EventQueue <- &event.Event{Code: event.EvtCodeIDEStubNotFound}
 
-		logger.Warnf("Not found ide_stub [%s]", ideStub)
+		logger.Warnf("Not found ide_stub [%s], please install it with this command: go get github.com/88250/ide_stub", ideStub)
 	}
 }
 
