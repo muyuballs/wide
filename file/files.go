@@ -36,6 +36,7 @@ var logger = log.NewLogger(os.Stdout)
 
 // Node represents a file node in file tree.
 type Node struct {
+	Id        string  `json:"id"`
 	Name      string  `json:"name"`
 	Path      string  `json:"path"`
 	IconSkin  string  `json:"iconSkin"` // Value should be end with a space
@@ -73,16 +74,16 @@ func initAPINode() {
 // The Go API source code package also as a child node,
 // so that users can easily view the Go API source code in file tree.
 func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
-	data := map[string]interface{}{"succ": true}
-	defer util.RetGzJSON(w, r, data)
-
-	session, _ := session.HTTPSession.Get(r, "wide-session")
-	if session.IsNew {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 
 		return
 	}
-	username := session.Values["username"].(string)
+	username := httpSession.Values["username"].(string)
+
+	data := map[string]interface{}{"succ": true}
+	defer util.RetGzJSON(w, r, data)
 
 	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
@@ -97,9 +98,16 @@ func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 	for _, workspace := range workspaces {
 		workspacePath := workspace + conf.PathSeparator + "src"
 
-		workspaceNode := Node{Name: workspace[strings.LastIndex(workspace, conf.PathSeparator)+1:],
-			Path: workspacePath, IconSkin: "ico-ztree-dir-workspace ", Type: "d",
-			Creatable: true, Removable: false, IsGoAPI: false, Children: []*Node{}}
+		workspaceNode := Node{
+			Id:        filepath.ToSlash(workspacePath), // jQuery API can't accept "\", so we convert it to "/"
+			Name:      workspace[strings.LastIndex(workspace, conf.PathSeparator)+1:],
+			Path:      workspacePath,
+			IconSkin:  "ico-ztree-dir-workspace ",
+			Type:      "d",
+			Creatable: true,
+			Removable: false,
+			IsGoAPI:   false,
+			Children:  []*Node{}}
 
 		walk(workspacePath, &workspaceNode, true, true, false)
 
@@ -115,8 +123,22 @@ func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 
 // RefreshDirectoryHandler handles request of refresh a directory of file tree.
 func RefreshDirectoryHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	r.ParseForm()
 	path := r.FormValue("path")
+
+	if !authWorkspace(username, path) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
 
 	node := Node{Name: "root", Path: path, IconSkin: "ico-ztree-dir ", Type: "d", Children: []*Node{}}
 
@@ -134,6 +156,14 @@ func RefreshDirectoryHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetFileHandler handles request of opening file by editor.
 func GetFileHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -147,6 +177,12 @@ func GetFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := args["path"].(string)
+
+	if !authWorkspace(username, path) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
 
 	size := util.File.GetFileSize(path)
 	if size > 5242880 { // 5M
@@ -193,6 +229,14 @@ func GetFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // SaveFileHandler handles request of saving file.
 func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -207,6 +251,12 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	filePath := args["file"].(string)
 	sid := args["sid"].(string)
+
+	if !authWorkspace(username, filePath) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
 
 	fout, err := os.Create(filePath)
 
@@ -235,6 +285,14 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // NewFileHandler handles request of creating file or directory.
 func NewFileHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -248,6 +306,13 @@ func NewFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := args["path"].(string)
+
+	if !authWorkspace(username, path) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+
 	fileType := args["fileType"].(string)
 	sid := args["sid"].(string)
 
@@ -272,6 +337,14 @@ func NewFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // RemoveFileHandler handles request of removing file or directory.
 func RemoveFileHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -285,6 +358,12 @@ func RemoveFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := args["path"].(string)
+	if !authWorkspace(username, path) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+
 	sid := args["sid"].(string)
 
 	wSession := session.WideSessions.Get(sid)
@@ -303,6 +382,14 @@ func RemoveFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // RenameFileHandler handles request of renaming file or directory.
 func RenameFileHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -316,7 +403,19 @@ func RenameFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldPath := args["oldPath"].(string)
+	if !authWorkspace(username, oldPath) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+
 	newPath := args["newPath"].(string)
+	if !authWorkspace(username, newPath) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+
 	sid := args["sid"].(string)
 
 	wSession := session.WideSessions.Get(sid)
@@ -347,6 +446,14 @@ func (f foundPaths) Less(i, j int) bool { return f[i].score > f[j].score }
 
 // FindHandler handles request of find files under the specified directory with the specified filename pattern.
 func FindHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+	username := httpSession.Values["username"].(string)
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -359,15 +466,13 @@ func FindHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := args["path"].(string) // path of selected file in file tree
-	name := args["name"].(string)
-
-	session, _ := session.HTTPSession.Get(r, "wide-session")
-	if session.IsNew {
+	if !authWorkspace(username, path) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 
 		return
 	}
-	username := session.Values["username"].(string)
+
+	name := args["name"].(string)
 
 	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
@@ -395,6 +500,13 @@ func FindHandler(w http.ResponseWriter, r *http.Request) {
 
 // SearchTextHandler handles request of searching files under the specified directory with the specified keyword.
 func SearchTextHandler(w http.ResponseWriter, r *http.Request) {
+	httpSession, _ := session.HTTPSession.Get(r, "wide-session")
+	if httpSession.IsNew {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+
+		return
+	}
+
 	data := map[string]interface{}{"succ": true}
 	defer util.RetJSON(w, r, data)
 
@@ -446,7 +558,13 @@ func walk(path string, node *Node, creatable, removable, isGOAPI bool) {
 
 		fio, _ := os.Lstat(fpath)
 
-		child := Node{Name: filename, Path: fpath, Removable: removable, IsGoAPI: isGOAPI, Children: []*Node{}}
+		child := Node{
+			Id:        filepath.ToSlash(fpath), // jQuery API can't accept "\", so we convert it to "/"
+			Name:      filename,
+			Path:      fpath,
+			Removable: removable,
+			IsGoAPI:   isGOAPI,
+			Children:  []*Node{}}
 		node.Children = append(node.Children, &child)
 
 		if nil == fio {
@@ -725,4 +843,23 @@ func searchInFile(path string, text string) []*Snippet {
 	}
 
 	return ret
+}
+
+func authWorkspace(username, path string) bool {
+	path = filepath.FromSlash(path)
+
+	if strings.HasPrefix(path, util.Go.GetAPIPath()) {
+		return true
+	}
+
+	userWorkspace := conf.GetUserWorkspace(username)
+	workspaces := filepath.SplitList(userWorkspace)
+
+	for _, workspace := range workspaces {
+		if strings.HasPrefix(path, workspace) {
+			return true
+		}
+	}
+
+	return false
 }

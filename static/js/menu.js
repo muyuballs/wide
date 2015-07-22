@@ -122,7 +122,7 @@ var menu = {
             return false;
         }
         for (var i = 0, ii = editors.data.length; i < ii; i++) {
-            var path = tree.fileTree.getNodeByTId(editors.data[i].id).path;
+            var path = editors.data[i].id;
             var editor = editors.data[i].editor;
 
             if ("text/x-go" === editor.getOption("mode")) {
@@ -375,7 +375,7 @@ var menu = {
                     for (var i = 0, max = emptys.length; i < max; i++) {
                         var tabIndex = emptys[i].closest('div').data("index"),
                                 text = $.trim(emptys[i].parent().text());
-                        emptysTip += '[' + $("#dialogPreference .tabs > div[data-index=" + tabIndex + "]").text()
+                        emptysTip += '[' + $('#dialogPreference .tabs > div[data-index="' + tabIndex + '"]').text()
                                 + '] -> [' + text.substr(0, text.length - 1)
                                 + ']: ' + config.label.no_empty + "<br/>";
                     }
@@ -426,7 +426,8 @@ var menu = {
                             $editorFontSize = $dialogPreference.find("input[name=editorFontSize]"),
                             $editorLineHeight = $dialogPreference.find("input[name=editorLineHeight]"),
                             $editorTheme = $dialogPreference.find("select[name=editorTheme]"),
-                            $editorTabSize = $dialogPreference.find("input[name=editorTabSize]");
+                            $editorTabSize = $dialogPreference.find("input[name=editorTabSize]"),
+                            $keymap = $dialogPreference.find("select[name=keymap]");
 
                     $.extend(request, {
                         "fontFamily": $fontFamily.val(),
@@ -441,8 +442,13 @@ var menu = {
                         "editorFontSize": $editorFontSize.val(),
                         "editorLineHeight": $editorLineHeight.val(),
                         "editorTheme": $editorTheme.val(),
-                        "editorTabSize": $editorTabSize.val()
+                        "editorTabSize": $editorTabSize.val(),
+                        "keymap": $keymap.val()
                     });
+                    
+                    if (config.keymap !== $keymap.val()) {
+                        window.location.reload();
+                    }
 
                     $.ajax({
                         type: 'POST',
@@ -466,6 +472,10 @@ var menu = {
                             $editorLineHeight.data("value", $editorLineHeight.val());
                             $editorTheme.data("value", $editorTheme.val());
                             $editorTabSize.data("value", $editorTabSize.val());
+                            $keymap.data("value", $keymap.val());
+                            
+                            // update the config
+                            config.keymap = $keymap.val();
 
                             var $okBtn = $("#dialogPreference").closest(".dialog-main").find(".dialog-footer > button:eq(0)");
                             $okBtn.prop("disabled", true);

@@ -87,21 +87,19 @@ func Load() {
 
 // AddHandler adds the specified handlers to user event queues.
 func (uq *UserEventQueue) AddHandler(handlers ...Handler) {
-	for _, handler := range handlers {
-		uq.Handlers = append(uq.Handlers, handler)
-	}
+	uq.Handlers = append(uq.Handlers, handlers...)
 }
 
 // New initializes a user event queue with the specified wide session id.
 func (ueqs queues) New(sid string) *UserEventQueue {
-	q := ueqs[sid]
-	if nil != q {
+
+	if q, ok := ueqs[sid]; ok {
 		logger.Warnf("Already exist a user queue in session [%s]", sid)
 
 		return q
 	}
 
-	q = &UserEventQueue{
+	q := &UserEventQueue{
 		Sid:   sid,
 		Queue: make(chan *Event, maxQueueLength),
 	}
@@ -126,14 +124,11 @@ func (ueqs queues) New(sid string) *UserEventQueue {
 
 // Close closes a user event queue with the specified wide session id.
 func (ueqs queues) Close(sid string) {
-	q := ueqs[sid]
-	if nil == q {
-		return
+
+	if q, ok := ueqs[sid]; ok {
+		close(q.Queue)
+		delete(ueqs, sid)
 	}
-
-	close(q.Queue)
-
-	delete(ueqs, sid)
 }
 
 // Handler represents an event handler.

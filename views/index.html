@@ -398,12 +398,12 @@
             <div class="side">
                 <span title="{{.i18n.min}}" class="font-ico ico-min"></span>
                 <div class="tabs">
-                    <div class="current" data-index="filreTree">
+                    <div class="current" data-index="fileTree">
                         <span title="{{.i18n.file}}">{{.i18n.file}}</span>
                     </div>
                 </div> 
                 <div class="tabs-panel">
-                    <div data-index="filreTree">
+                    <div data-index="fileTree">
                         <ul id="files" tabindex="-1" class="ztree"></ul>
                         <input id="importFileupload" class="fn-none" type="file"
                                name="files[]" onclick="tree.import();" multiple>
@@ -502,7 +502,7 @@
                     </div>
                 </div> 
                 <div class="tabs-panel">
-                    <div id="outline" tabindex="-1"  data-index="outline"></div>
+                    <div id="outline" tabindex="-1" data-index="outline"></div>
                 </div>
             </div>
 
@@ -608,7 +608,9 @@
                             "wideSessionId": '{{.session.ID}}',
                             "editorTheme": '{{.user.Editor.Theme}}',
                             "latestSessionContent": {{.latestSessionContent}},
-                            "editorTabSize": '{{.user.Editor.TabSize}}'
+                            "editorTabSize": '{{.user.Editor.TabSize}}',
+                            "keymap": '{{.user.Keymap}}',
+                            "autocomplete": {{.conf.Autocomplete}}
                     };
                     // 发往 Wide 的所有 AJAX 请求需要使用该函数创建请求参数.
                             function newWideRequest() {
@@ -657,6 +659,8 @@
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/css/css.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/shell/shell.js"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/mode/sql/sql.js"></script>
+        <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/codemirror-{{.codeMirrorVer}}/keymap/vim.js"></script>
+        
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/lint/json-lint.js?{{.conf.StaticResourceVersion}}"></script>
         <script type="text/javascript" src="{{.conf.StaticServer}}/static/js/lib/lint/go-lint.js?{{.conf.StaticResourceVersion}}"></script>
         

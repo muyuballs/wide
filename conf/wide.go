@@ -39,7 +39,7 @@ const (
 	PathListSeparator = string(os.PathListSeparator)
 
 	// WideVersion holds the current wide version.
-	WideVersion = "1.2.0"
+	WideVersion = "1.3.0"
 	// CodeMirrorVer holds the current editor version.
 	CodeMirrorVer = "5.1"
 
@@ -70,6 +70,7 @@ type conf struct {
 	Locale                string // default locale
 	Playground            string // playground directory
 	AllowRegister         bool   // allow register or not
+	Autocomplete          bool   // default autocomplete
 }
 
 // Logger.
@@ -124,6 +125,11 @@ func initUsers() {
 			logger.Errorf("Parses [%s] error: %v", name, err)
 
 			os.Exit(-1)
+		}
+
+		// Compatibility upgrade (1.3.0): https://github.com/b3log/wide/issues/83
+		if "" == user.Keymap {
+			user.Keymap = "wide"
 		}
 
 		Users = append(Users, user)
