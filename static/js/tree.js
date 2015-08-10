@@ -171,6 +171,26 @@ var tree = {
             window.open(config.context + '/file/zip?path=' + wide.curNode.path + ".zip");
         }
     },
+    crossCompile: function (platform) {
+        var request = newWideRequest();
+        request.path = wide.curNode.path;
+        request.platform = platform;
+
+        $.ajax({
+            async: false,
+            type: 'POST',
+            url: config.context + '/cross',
+            data: JSON.stringify(request),
+            dataType: "json",
+            success: function (data) {
+                if (!data.succ) {
+                    $("#dialogAlert").dialog("open", data.msg);
+
+                    return false;
+                }
+            }
+        });
+    },
     decompress: function () {
         var request = newWideRequest();
         request.path = wide.curNode.path;
@@ -278,10 +298,16 @@ var tree = {
                                             $fileRMenu.find(".remove").addClass("disabled");
                                         }
 
-                                        if (wide.curNode.path.indexOf("zip", wide.curNode.path.length - "zip".length) === -1) { // !path.endsWith("zip")
+                                        if (-1 === wide.curNode.path.indexOf("zip", wide.curNode.path.length - "zip".length)) { // !path.endsWith("zip")
                                             $fileRMenu.find(".decompress").hide();
                                         } else {
                                             $fileRMenu.find(".decompress").show();
+                                        }
+
+                                        if (-1 === wide.curNode.path.indexOf("go", wide.curNode.path.length - "go".length)) { // !path.endsWith("go")
+                                            $fileRMenu.find(".linux64").hide();
+                                        } else {
+                                            $fileRMenu.find(".linux64").show();
                                         }
 
                                         var top = event.clientY - 10;
@@ -398,7 +424,7 @@ var tree = {
                         var mode = CodeMirror.findModeByFileName(treeNode.path);
                         data.mode = mode.mime;
                     }
-                    
+
                     if (!data.mode) {
                         console.error("Can't find mode by file name [" + treeNode.path + "]");
                     }
@@ -412,7 +438,7 @@ var tree = {
                     if (!tempCursor) {
                         tempCursor = CodeMirror.Pos(0, 0);
                     }
-                    
+
                     editors.newEditor(data, tempCursor);
 
                     wide.refreshOutline();
@@ -499,10 +525,7 @@ var tree = {
                         request = newWideRequest();
 
                 request.oldPath = wide.curNode.path;
-
-                request.newPath = wide.curNode.path.substring(0,
-                        wide.curNode.path.lastIndexOf(config.pathSeparator))
-                        + config.pathSeparator + name;
+                request.newPath = wide.curNode.path.substring(0, wide.curNode.path.lastIndexOf("/")) + name;
 
                 $.ajax({
                     type: 'POST',
