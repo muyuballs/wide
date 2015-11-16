@@ -38,8 +38,8 @@ const (
 	// PathListSeparator holds the OS-specific path list separator.
 	PathListSeparator = string(os.PathListSeparator)
 
-	// WideVersion holds the current wide version.
-	WideVersion = "1.3.0"
+	// WideVersion holds the current Wide's version.
+	WideVersion = "1.4.0"
 	// CodeMirrorVer holds the current editor version.
 	CodeMirrorVer = "5.1"
 
@@ -166,7 +166,7 @@ func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticSe
 
 	logger.Debug("Conf: \n" + string(bytes))
 
-	// Working Driectory
+	// Working Directory
 	Wide.WD = util.OS.Pwd()
 	logger.Debugf("${pwd} [%s]", Wide.WD)
 
@@ -195,26 +195,26 @@ func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticSe
 	}
 
 	// IP
-	ip, err := util.Net.LocalIP()
-	if err != nil {
-		logger.Error(err)
-
-		os.Exit(-1)
-	}
-
-	logger.Debugf("${ip} [%s]", ip)
-
-	Docker = confDocker
-
 	if "" != confIP {
-		ip = confIP
-	}
+		Wide.IP = confIP
+	} else {
+		ip, err := util.Net.LocalIP()
+		if nil != err {
+			logger.Error(err)
 
-	Wide.IP = strings.Replace(Wide.IP, "${ip}", ip, 1)
+			os.Exit(-1)
+		}
+
+		logger.Debugf("${ip} [%s]", ip)
+		Wide.IP = strings.Replace(Wide.IP, "${ip}", ip, 1)
+	}
 
 	if "" != confPort {
 		Wide.Port = confPort
 	}
+
+	// Docker flag
+	Docker = confDocker
 
 	// Server
 	Wide.Server = strings.Replace(Wide.Server, "{IP}", Wide.IP, 1)
@@ -235,7 +235,9 @@ func initWide(confPath, confIP, confPort, confServer, confLogLevel, confStaticSe
 		Wide.Context = confContext
 	}
 
-	Wide.StaticResourceVersion = strings.Replace(Wide.StaticResourceVersion, "${time}", strconv.FormatInt(time.Now().UnixNano(), 10), 1)
+	time := strconv.FormatInt(time.Now().UnixNano(), 10)
+	logger.Debugf("${time} [%s]", time)
+	Wide.StaticResourceVersion = strings.Replace(Wide.StaticResourceVersion, "${time}", time, 1)
 
 	// Channel
 	Wide.Channel = strings.Replace(Wide.Channel, "{IP}", Wide.IP, 1)

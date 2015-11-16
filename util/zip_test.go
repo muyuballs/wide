@@ -16,10 +16,12 @@ package util
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-var packageName = "test_zip"
+var testDir = "../tmp"
+var packageName = filepath.Join(testDir, "test_zip")
 
 func TestCreate(t *testing.T) {
 	zipFile, err := Zip.Create(packageName + ".zip")
@@ -54,11 +56,15 @@ func TestUnzip(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	logger.Info(testDir)
+
 	retCode := m.Run()
 
 	// clean test data
-	os.RemoveAll(packageName + ".zip")
-	os.RemoveAll(packageName)
+	os.RemoveAll(testDir + "/test_zip")
+	os.RemoveAll(testDir + "/util")
+	os.RemoveAll(testDir + "/file.go")
+	os.RemoveAll(testDir + "/test_zip.zip")
 
 	os.Exit(retCode)
 }

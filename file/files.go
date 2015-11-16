@@ -82,8 +82,8 @@ func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	username := httpSession.Values["username"].(string)
 
-	data := map[string]interface{}{"succ": true}
-	defer util.RetGzJSON(w, r, data)
+	result := util.NewResult()
+	defer util.RetGzResult(w, r, result)
 
 	userWorkspace := conf.GetUserWorkspace(username)
 	workspaces := filepath.SplitList(userWorkspace)
@@ -118,7 +118,7 @@ func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 	// add Go API node
 	root.Children = append(root.Children, apiNode)
 
-	data["root"] = root
+	result.Data = root
 }
 
 // RefreshDirectoryHandler handles request of refresh a directory of file tree.
@@ -491,7 +491,7 @@ func FindHandler(w http.ResponseWriter, r *http.Request) {
 		for _, r := range rs {
 			substr := util.Str.LCS(path, *r)
 
-			founds = append(founds, &foundPath{Path: *r, score: len(substr)})
+			founds = append(founds, &foundPath{Path: filepath.ToSlash(*r), score: len(substr)})
 		}
 	}
 
@@ -625,6 +625,11 @@ func listFiles(dirname string) []string {
 
 			dirs = append(dirs, name)
 		} else {
+			// exclude the .DS_Store directory on Mac OS X
+			if ".DS_Store" == fio.Name() {
+				continue
+			}
+
 			files = append(files, name)
 		}
 	}
@@ -838,7 +843,8 @@ func searchInFile(path string, text string) []*Snippet {
 		ch := strings.Index(strings.ToLower(line), strings.ToLower(text))
 
 		if -1 != ch {
-			snippet := &Snippet{Path: path, Line: idx + 1, Ch: ch + 1, Contents: []string{line}}
+			snippet := &Snippet{Path: filepath.ToSlash(path),
+				Line: idx + 1, Ch: ch + 1, Contents: []string{line}}
 
 			ret = append(ret, snippet)
 		}

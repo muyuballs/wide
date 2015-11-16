@@ -19,13 +19,11 @@ import (
 	"flag"
 	"html/template"
 	"io"
-	"math/rand"
 	"mime"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +50,7 @@ func init() {
 	confIP := flag.String("ip", "", "this will overwrite Wide.IP if specified")
 	confPort := flag.String("port", "", "this will overwrite Wide.Port if specified")
 	confServer := flag.String("server", "", "this will overwrite Wide.Server if specified")
-	confLogLevel := flag.String("log_level", "debug", "this will overwrite Wide.LogLevel if specified")
+	confLogLevel := flag.String("log_level", "", "this will overwrite Wide.LogLevel if specified")
 	confStaticServer := flag.String("static_server", "", "this will overwrite Wide.StaticServer if specified")
 	confContext := flag.String("context", "", "this will overwrite Wide.Context if specified")
 	confChannel := flag.String("channel", "", "this will overwrite Wide.Channel if specified")
@@ -67,7 +65,7 @@ func init() {
 
 	wd := util.OS.Pwd()
 	if strings.HasPrefix(wd, os.TempDir()) {
-		logger.Error("Don't run wide in OS' temp directory or with `go run`")
+		logger.Error("Don't run Wide in OS' temp directory or with `go run`")
 
 		os.Exit(-1)
 	}
@@ -88,7 +86,8 @@ func init() {
 		session.FixedTimeReport()
 	}
 
-	logger.Debug("cross-compilation ", util.Go.GetCrossPlatforms())
+	logger.Debug("host ["+runtime.Version()+", "+runtime.GOOS+"_"+runtime.GOARCH+
+		"], cross-compilation ", util.Go.GetCrossPlatforms())
 }
 
 // Main.
@@ -221,11 +220,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	httpSession.Save(r, w)
 
-	// create a Wide session
-	rand.Seed(time.Now().UnixNano())
-	sid := strconv.Itoa(rand.Int())
-	wideSession := session.WideSessions.New(httpSession, sid)
-
 	user := conf.GetUser(username)
 	if nil == user {
 		logger.Warnf("Not found user [%s]", username)
@@ -240,7 +234,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	wideSessions := session.WideSessions.GetByUsername(username)
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale,
-		"session": wideSession, "latestSessionContent": user.LatestSessionContent,
+		"username": username, "sid": session.WideSessions.GenId(), "latestSessionContent": user.LatestSessionContent,
 		"pathSeparator": conf.PathSeparator, "codeMirrorVer": conf.CodeMirrorVer,
 		"user": user, "editorThemes": conf.GetEditorThemes(), "crossPlatforms": util.Go.GetCrossPlatforms()}
 
@@ -291,7 +285,7 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := map[string]interface{}{"conf": conf.Wide, "i18n": i18n.GetAll(locale), "locale": locale,
-		"username": username, "workspace": userWorkspace, "ver": conf.WideVersion, "session": wSession}
+		"username": username, "workspace": userWorkspace, "ver": conf.WideVersion, "sid": sid}
 
 	t, err := template.ParseFiles("views/start.html")
 

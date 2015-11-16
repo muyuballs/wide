@@ -125,25 +125,6 @@ var wide = {
                         }
 
                         $("#dialogRemoveConfirm").dialog("close");
-                        tree.fileTree.removeNode(wide.curNode);
-
-                        if (!tree.isDir()) {
-                            // 是文件的话，查看 editor 中是否被打开，如打开则移除
-                            for (var i = 0, ii = editors.data.length; i < ii; i++) {
-                                if (editors.data[i].id === wide.curNode.path) {
-                                    $('.edit-panel .tabs > div[data-index="' + wide.curNode.path + '"]').find(".ico-close").click();
-                                    break;
-                                }
-                            }
-                        } else {
-                            for (var i = 0, ii = editors.data.length; i < ii; i++) {
-                                if (tree.isParents(editors.data[i].id, wide.curNode.path)) {
-                                    $('.edit-panel .tabs > div[data-index="' + editors.data[i].id + '"]').find(".ico-close").click();
-                                    i--;
-                                    ii--;
-                                }
-                            }
-                        }
                     }
                 });
             }
@@ -180,20 +161,8 @@ var wide = {
                             $(".bottom-window-group .notification").focus();
                             return false;
                         }
-
-                        var mode = CodeMirror.findModeByFileName(name);
-
+                        
                         $("#dialogNewFilePrompt").dialog("close");
-                        var iconSkin = wide.getClassBySuffix(name.split(".")[1]);
-
-                        tree.fileTree.addNodes(wide.curNode, [{
-                                "name": name,
-                                "iconSkin": iconSkin,
-                                "path": request.path,
-                                "mode": mode,
-                                "removable": true,
-                                "creatable": true
-                            }]);
                     }
                 });
             }
@@ -232,15 +201,6 @@ var wide = {
                         }
 
                         $("#dialogNewDirPrompt").dialog("close");
-
-                        tree.fileTree.addNodes(wide.curNode, [{
-                                "name": name,
-                                "iconSkin": "ico-ztree-dir ",
-                                "path": request.path,
-                                "removable": true,
-                                "creatable": true,
-                                "isParent": true
-                            }]);
                     }
                 });
             }
@@ -540,7 +500,7 @@ var wide = {
             console.log('[output onclose] disconnected (' + e.code + ')');
         };
         outputWS.onerror = function (e) {
-            console.log('[output onerror] ' + e);
+            console.log('[output onerror]');
         };
     },
     _initFooter: function () {
@@ -812,8 +772,8 @@ $(document).ready(function () {
     tree.init();
     menu.init();
     hotkeys.init();
-    notification.init();
     session.init();
+    notification.init();
     editors.init();
     windows.init();
     bottomGroup.init();

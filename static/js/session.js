@@ -165,8 +165,45 @@ var session = {
 
             switch (data.cmd) {
                 case 'create-file':
+                    var node = tree.fileTree.getNodeByTId(tree.getTIdByPath(data.dir)),
+                            name = data.path.replace(data.dir + '/', ''),
+                            mode = CodeMirror.findModeByFileName(name),
+                            iconSkin = wide.getClassBySuffix(name.split(".")[1]);
+
+                    if (data.type && data.type === 'f') {
+                        tree.fileTree.addNodes(node, [{
+                                "id": data.path,
+                                "name": name,
+                                "iconSkin": iconSkin,
+                                "path": data.path,
+                                "mode": mode,
+                                "removable": true,
+                                "creatable": true
+                            }]);
+
+                    } else {
+                        tree.fileTree.addNodes(node, [{
+                                "id": data.path,
+                                "name": name,
+                                "iconSkin": "ico-ztree-dir ",
+                                "path": data.path,
+                                "removable": true,
+                                "creatable": true,
+                                "isParent": true
+                            }]);
+                    }
+
                     break;
                 case 'remove-file':
+                case 'rename-file':
+                    var node = tree.fileTree.getNodeByTId(tree.getTIdByPath(data.path));
+                    tree.fileTree.removeNode(node);
+
+                    var nodes = tree.fileTree.transformToArray(node);
+                    for (var i = 0, ii = nodes.length; i < ii; i++) {
+                        editors.tabs.del(nodes[i].path);
+                    }
+
                     break;
             }
         };
@@ -186,7 +223,7 @@ var session = {
             $(".notification-count").show();
         };
         sessionWS.onerror = function (e) {
-            console.log('[session onerror] ' + JSON.parse(e));
+            console.log('[session onerror]');
         };
     }
 };
